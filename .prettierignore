@@ -1,0 +1,2 @@
+# The tests read line and column numbers off the fixtures. Helm templates fail to parse as YAML.
+test/fixtures/
