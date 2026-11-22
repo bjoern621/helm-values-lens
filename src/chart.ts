@@ -38,9 +38,19 @@ export interface LoadedChart {
     dependencies: Dependency[]
 }
 
+/** How long a download may take before it counts as failed. An unreachable registry otherwise holds discovery for minutes. */
+const PULL_TIMEOUT_MS = 45_000
+
+/** How long a failed download stays failed before the next attempt. */
+const PULL_RETRY_DELAY_MS = 10 * 60_000
+
+const pulls = new Map<string, Promise<string>>()
+const failedPulls = new Map<string, { at: number; error: Error }>()
+
 /**
  * Returns the folder of a chart, pulling a chart from a Helm repository into `cacheDir` once per version.
- * An OCI registry takes a `repoURL` without a scheme, as Argo CD writes it.
+ * An OCI registry takes a `repoURL` without a scheme, as Argo CD writes it, or with `oci://`.
+ * Releases that ask for one chart at once share one download. A failed download fails again without a retry for a while.
  */
 export async function chartDir(ref: ChartRef, cacheDir: string, helmPath: string): Promise<string> {
     if (ref.kind === "directory") return ref.dir
@@ -48,19 +58,56 @@ export async function chartDir(ref: ChartRef, cacheDir: string, helmPath: string
     const target = join(cacheDir, safeName(`${ref.repoURL}_${ref.chart}_${ref.version}`))
     const chartFolder = join(target, ref.chart)
     if (existsSync(join(chartFolder, "Chart.yaml"))) return chartFolder
+    const failed = failedPulls.get(target)
+    if (failed !== undefined && Date.now() - failed.at < PULL_RETRY_DELAY_MS) throw failed.error
+    let pull = pulls.get(target)
+    if (pull === undefined) {
+        pull = pullChart(ref, target, helmPath).finally(() => pulls.delete(target))
+        pulls.set(target, pull)
+    }
+    try {
+        await pull
+    } catch (error) {
+        failedPulls.set(target, { at: Date.now(), error: error as Error })
+        throw error
+    }
+    failedPulls.delete(target)
+    return chartFolder
+}
+
+async function pullChart(
+    ref: { repoURL: string; chart: string; version: string },
+    target: string,
+    helmPath: string
+): Promise<string> {
     const partial = `${target}.partial`
     rmSync(partial, { recursive: true, force: true })
     mkdirSync(partial, { recursive: true })
     const oci = !/^https?:\/\//.test(ref.repoURL)
+    const registry = ref.repoURL.replace(/^oci:\/\//, "").replace(/\/$/, "")
     const args = oci
-        ? ["pull", `oci://${ref.repoURL.replace(/\/$/, "")}/${ref.chart}`]
+        ? ["pull", `oci://${registry}/${ref.chart}`]
         : ["pull", ref.chart, "--repo", ref.repoURL]
     if (ref.version !== "") args.push("--version", ref.version)
     args.push("--untar", "--untardir", partial)
-    await run(helmPath, args, { timeout: 120_000 })
+    try {
+        await run(helmPath, args, { timeout: PULL_TIMEOUT_MS })
+    } catch (error) {
+        rmSync(partial, { recursive: true, force: true })
+        const { stderr, killed } = error as { stderr?: string; killed?: boolean }
+        const reason = killed
+            ? `no answer within ${PULL_TIMEOUT_MS / 1000} s`
+            : (stderr
+                  ?.trim()
+                  .replace(/^Error: /, "")
+                  .split("\n")[0] ?? String(error))
+        throw new Error(
+            `${ref.chart} ${ref.version} did not download from ${ref.repoURL}: ${reason}`
+        )
+    }
     rmSync(target, { recursive: true, force: true })
     renameSync(partial, target)
-    return chartFolder
+    return target
 }
 
 /** Reads the defaults of a chart and of the charts in its `charts/` folder. */
