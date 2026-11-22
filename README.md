@@ -1,8 +1,13 @@
 # Helm Values Lens
 
-Helm Values Lens shows in VS Code where each Helm value gets set, which layer overrides it and the value that the chart renders with.
-It reads the order of the values files from the files that deploy your charts: Argo CD Applications and ApplicationSets, Helmfiles, Flux HelmReleases and Kustomize `helmCharts`.
-A repository with one of those needs no setup.
+Helm Values Lens shows in VS Code, next to each line of a values file, the value that the Helm chart ends up with.
+A value often gets set in several files, such as the chart's `values.yaml`, a `values-production.yaml` and the Argo CD Application that deploys the chart.
+Each of these files adds a layer of values.
+The last layer wins.
+The hint names that layer and its value.
+
+The extension reads which files feed a release, and in which order, from the file that deploys the chart: an Argo CD Application or ApplicationSet, a `helmfile.yaml`, a Flux HelmRelease or a `kustomization.yaml` with `helmCharts`.
+A repository holding one of those needs no settings.
 
 ![A values file with the hints of the release picked in the status bar and the hover listing every release that reads the file](docs/values-file.png)
 
