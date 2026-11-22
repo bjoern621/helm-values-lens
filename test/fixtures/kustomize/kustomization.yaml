@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+helmGlobals:
+  chartHome: ../charts
+helmCharts:
+  - name: app
+    releaseName: kapp
+    namespace: kust
+    valuesFile: values/base.yaml
+    valuesInline:
+      replicas: 7
+      podAnnotations:
+        team: kust
+    additionalValuesFiles:
+      - values/extra.yaml
+  - name: dump
+    releaseName: kmerge
+    valuesMerge: merge
+    valuesInline:
+      replicas: 9
+      annotations:
+        team: merge
+      feature:
+        mode: inline
+  - name: dump
+    releaseName: kreplace
+    valuesMerge: replace
+    valuesFile: values/ignored.yaml
+    valuesInline:
+      feature:
+        enabled: true

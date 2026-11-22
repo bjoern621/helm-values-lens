@@ -1,0 +1,14 @@
+environments:
+  dev: {}
+  prod: {}
+---
+releases:
+  - name: dump
+    namespace: dump-{{ .Environment.Name }}
+    chart: ../../charts/dump
+    values:
+      - values/{{ .Environment.Name }}.yaml
+      - values/common.yaml.gotmpl
+    setTemplate:
+      - name: annotations.stage
+        value: "{{ .Environment.Name }}"

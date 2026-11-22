@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-values
+  namespace: apps
+data:
+  tag: "4.2"
+  values.yaml: |
+    replicas: 3
+    image:
+      repository: fluxrepo
+    legacy:
+      mode: c
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: web-secret
+  namespace: apps
+data:
+  ttl: MzAw

@@ -1,0 +1,11 @@
+replicas: 1
+image:
+  repository: nginx
+  tag: "1.0"
+env:
+  - name: A
+    value: "1"
+annotations: {}
+feature:
+  enabled: false
+  mode: basic

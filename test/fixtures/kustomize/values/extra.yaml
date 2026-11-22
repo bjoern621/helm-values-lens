@@ -1,0 +1,4 @@
+cache:
+  size: 50
+podAnnotations:
+  extra: "yes"

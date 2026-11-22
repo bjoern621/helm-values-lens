@@ -1,0 +1,30 @@
+repositories:
+  - name: example
+    url: https://charts.example.com
+releases:
+  - name: web
+    namespace: web
+    chart: ../charts/app
+    missingFileHandler: Warn
+    values:
+      - ../charts/app/values-base.yaml
+      - replicas: 4
+        podAnnotations:
+          team: web
+      - values/web.yaml
+      - values/absent.yaml
+    set:
+      - name: image.repository
+        value: myrepo
+      - name: cache.ttl
+        value: 90
+    setString:
+      - name: podAnnotations.note
+        value: "true"
+  - name: dump
+    chart: ../charts/dump
+    values:
+      - values/dump.yaml
+    set:
+      - name: feature.mode
+        value: advanced
