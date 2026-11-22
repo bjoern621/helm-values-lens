@@ -1,6 +1,7 @@
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
+import { valueHints } from "../src/hints"
 import type { Release } from "../src/release"
 import {
     checkoutsOf,
@@ -108,6 +109,13 @@ describe.skipIf(!hasHelm)("discover", () => {
         expect(
             layer.kind === "object" && layer.sites.get(pathKey(["ingress", "host"]))?.key
         ).toEqual({ line: 18, column: 10 })
+    })
+
+    it("says that a later layer sets the same value again", () => {
+        const values = join(GITOPS, "charts", "web", "values.yaml")
+        const labels = valueHints(values, [named("web-production")]).map((hint) => hint.label)
+        expect(labels).toContain("also set by values-production.yaml")
+        expect(labels).toContain("overridden by helm.valuesObject: 3")
     })
 
     it("agrees with the COMPUTED VALUES of helm for every release", () => {

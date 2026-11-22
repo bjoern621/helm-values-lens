@@ -4,6 +4,7 @@
 import { homedir } from "node:os"
 import { join, relative } from "node:path"
 import { isPlainMap } from "./coalesce"
+import { releaseTitle } from "./hints"
 import { unknownKeys } from "./release"
 import { renderRelease } from "./render"
 import { dottedPath, splitPathKey } from "./yamlPaths"
@@ -22,21 +23,21 @@ async function main(): Promise<void> {
     const wanted = (name: string) => only === undefined || name === only
     for (const failure of discovery.failures) {
         if (!wanted(failure.spec.name)) continue
-        console.log(`\n${title(failure.spec)}: chart not loaded: ${failure.reason}`)
+        console.log(`\n${releaseTitle(failure.spec)}: chart not loaded: ${failure.reason}`)
     }
     for (const release of discovery.releases) {
         const spec = release.spec
         if (!wanted(spec.name)) continue
         const layers = release.trace.layers
         console.log(
-            `\n${title(spec)} [${spec.origin}] (${relative(root, spec.appFile)}:${spec.appLine + 1})`
+            `\n${releaseTitle(spec)} [${spec.origin}] (${relative(root, spec.appFile)}:${spec.appLine + 1})`
         )
         console.log(`  chart ${release.chart.name} at ${release.chart.dir}`)
         layers.forEach((layer, index) => console.log(`  ${index}. ${layer.label}`))
         for (const problem of release.problems) console.log(`  problem: ${problem}`)
         const renderError = discovery.renderErrors.get(spec.id)
         if (renderError !== undefined)
-            console.log(`  render failed: ${renderError.replace(/\s*\n\s*/g, " ")}`)
+            console.log(`  could not render: ${renderError.replace(/\s*\n\s*/g, " ")}`)
         for (const [key, settings] of release.trace.settings) {
             const own = settings.filter((setting) => setting.layerIndex >= release.firstUserLayer)
             if (own.length === 0 || own.every((setting) => isPlainMap(setting.value))) continue
@@ -55,17 +56,13 @@ async function main(): Promise<void> {
                 const rendered = await renderRelease(release, "helm")
                 console.log(`  rendered ${rendered.resources.size} resources`)
             } catch (error) {
-                console.log(`  render failed: ${String(error).split("\n")[0]}`)
+                console.log(`  could not render: ${String(error).split("\n")[0]}`)
             }
         }
     }
     console.log(
-        `\n${discovery.releases.length} releases loaded, ${discovery.failures.length} not loaded, ${discovery.renderErrors.size} renders failed`
+        `\n${discovery.releases.length} releases loaded, ${discovery.failures.length} not loaded, ${discovery.renderErrors.size} could not render`
     )
-}
-
-function title(spec: { name: string; parent?: string }): string {
-    return spec.parent === undefined ? spec.name : `${spec.parent} > ${spec.name}`
 }
 
 void main()

@@ -65,7 +65,7 @@ function placed(
  */
 export function valueHints(fsPath: string, releases: readonly Release[]): Hint[] {
     const sites = settingSites(fsPath, releases)
-    const names = new Set(sites.map((site) => site.release.spec.name))
+    const names = new Set(sites.map((site) => site.release.spec.id))
     const prefix = (release: Release) => (names.size > 1 ? `${release.spec.name}: ` : "")
     const hints: Hint[] = []
     for (const site of sites) {
@@ -81,7 +81,12 @@ export function valueHints(fsPath: string, releases: readonly Release[]): Hint[]
         const add = (kind: HintKind, label: string) =>
             hints.push({ position: at, kind, label: prefix(release) + label, release, path })
         if (setting.status === "overridden")
-            add("overridden", `overridden by ${by}: ${preview(final)}`)
+            add(
+                "overridden",
+                JSON.stringify(final) === JSON.stringify(setting.value)
+                    ? `also set by ${by}`
+                    : `overridden by ${by}: ${preview(final)}`
+            )
         else if (setting.status === "deleted") add("deleted", `deleted by ${by}`)
         else if (setting.status === "replaced") add("replaced", `replaced by ${by}`)
         else if (layerIndex >= release.firstUserLayer) {
@@ -96,10 +101,10 @@ export function valueHints(fsPath: string, releases: readonly Release[]): Hint[]
 /** Builds a hint with the final value after each `.Values` path that a template of a release reads. */
 export function templateHints(fsPath: string, text: string, releases: readonly Release[]): Hint[] {
     const hints: Hint[] = []
-    for (const release of releases) {
-        const prefix = templatePrefix(fsPath, release)
-        if (prefix === undefined) continue
-        const lines = text.split("\n")
+    const templated = releases.filter((release) => templatePrefix(fsPath, release) !== undefined)
+    const lines = text.split("\n")
+    for (const release of templated) {
+        const prefix = templatePrefix(fsPath, release)!
         lines.forEach((line, lineIndex) => {
             for (const match of line.matchAll(VALUES_READ)) {
                 const read = match[1]!.slice(1).split(".")
@@ -108,7 +113,7 @@ export function templateHints(fsPath: string, text: string, releases: readonly R
                 const path = global === undefined ? own : read
                 const final = valueAt(release.trace.final, path)
                 const position = { line: lineIndex, column: match.index + match[0].length }
-                const name = releases.length > 1 ? `${release.spec.name}: ` : ""
+                const name = templated.length > 1 ? `${release.spec.name}: ` : ""
                 hints.push({
                     position,
                     kind: "final",
@@ -148,7 +153,10 @@ export function siteAt(
 export function chainMarkdown(release: Release, path: ValuePath, fromFile: string): string {
     const settings = release.trace.settings.get(path.join("\u0000")) ?? []
     const final = valueAt(release.trace.final, path)
-    const lines = [`**${release.spec.name}** \`${path.join(".")}\` = \`${preview(final, 80)}\``, ""]
+    const lines = [
+        `**${releaseTitle(release.spec)}** \`${path.join(".")}\` = \`${preview(final, 80)}\``,
+        ""
+    ]
     for (const setting of settings) {
         const mark = setting.status === "wins" ? "✓" : setting.status === "deleted" ? "✗" : "↑"
         const where = siteLink(release, setting.layerIndex, path)
@@ -188,6 +196,11 @@ function layerName(release: Release, layerIndex: number, fromFile: string): stri
     if (layer.kind !== "file" || layer.fsPath === undefined) return layer.label
     const path = relative(fromFile.replace(/\/[^/]*$/, ""), layer.fsPath)
     return path.startsWith("../../") ? layer.label : path
+}
+
+/** Names a release after the release whose chart renders it, if any. */
+export function releaseTitle(spec: { name: string; parent?: string }): string {
+    return spec.parent === undefined ? spec.name : `${spec.parent} > ${spec.name}`
 }
 
 /** Shows a value in one short line: a string bare, a map or a list by its size. */

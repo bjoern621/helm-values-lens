@@ -33,6 +33,7 @@ export interface Dependency {
 export interface LoadedChart {
     dir: string
     name: string
+    version: string
     /** The defaults of the chart and of each dependency, the dependencies first. */
     layers: Layer[]
     dependencies: Dependency[]
@@ -114,6 +115,7 @@ async function pullChart(
 export function loadChart(dir: string, cacheDir: string): LoadedChart {
     const meta = (parse(readFileSync(join(dir, "Chart.yaml"), "utf8")) ?? {}) as {
         name?: string
+        version?: string
         dependencies?: { name: string; alias?: string; condition?: string; tags?: string[] }[]
     }
     const name = meta.name ?? dir
@@ -152,7 +154,7 @@ export function loadChart(dir: string, cacheDir: string): LoadedChart {
         }
     }
     layers.push(defaultsLayer(dir, "chart values.yaml", "chart"))
-    return { dir, name, layers, dependencies }
+    return { dir, name, version: String(meta.version ?? ""), layers, dependencies }
 }
 
 function defaultsLayer(dir: string, label: string, kind: "chart" | "subchart"): Layer {
