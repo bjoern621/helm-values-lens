@@ -70,6 +70,11 @@
                     "default": true,
                     "description": "Renders each release with helm template once the workspace opens and after each save of a YAML file."
                 },
+                "helmValuesLens.hover.showAllLayers": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Lists every values layer of the release in the hover, the ones that leave the key alone included."
+                },
                 "helmValuesLens.releases": {
                     "type": "array",
                     "default": [],

@@ -166,23 +166,56 @@ export function siteEnd(site: SettingSite): Position {
         : { line: site.key.line, column: Number.MAX_SAFE_INTEGER }
 }
 
-/** Renders the chain of one path as Markdown, lowest layer first, with the final value on top. */
-export function chainMarkdown(release: Release, path: ValuePath, fromFile: string): string {
+/**
+ * Renders the chain of one path as Markdown, lowest layer first, with the final value on top.
+ * With `allLayers`, the chart's own defaults and every layer above them appear, the ones that leave the path alone marked so.
+ * The defaults of a dependency appear only where they set the path.
+ */
+export function chainMarkdown(
+    release: Release,
+    path: ValuePath,
+    fromFile: string,
+    allLayers = false
+): string {
     const settings = release.trace.settings.get(path.join("\u0000")) ?? []
     const final = valueAt(release.trace.final, path)
     const lines = [
         `**${releaseTitle(release.spec)}** \`${path.join(".")}\` = \`${preview(final, 80)}\``,
         ""
     ]
-    for (const setting of settings) {
-        const mark = setting.status === "wins" ? "✓" : setting.status === "deleted" ? "✗" : "↑"
-        const where = siteLink(release, setting.layerIndex, path)
-        const name = layerName(release, setting.layerIndex, fromFile)
+    const chartDefaults = release.firstUserLayer - 1
+    release.trace.layers.forEach((layer, layerIndex) => {
+        const setting = settings.find((candidate) => candidate.layerIndex === layerIndex)
+        const name = layerName(release, layerIndex, fromFile)
+        if (setting === undefined) {
+            if (!allLayers || layerIndex < chartDefaults) return
+            const link =
+                layer.fsPath === undefined ? name : `[${name}](file://${encodeURI(layer.fsPath)})`
+            lines.push(`$(circle-large-outline) *not set* · ${link}`)
+            return
+        }
+        const where = siteLink(release, layerIndex, path)
         lines.push(
-            `${mark} ${where === undefined ? name : `[${name}](${where})`}: \`${preview(setting.value, 60)}\``
+            `${settingMark(setting, final)} · ${where === undefined ? name : `[${name}](${where})`}: \`${preview(setting.value, 60)}\``
         )
-    }
+    })
     return lines.join("\n\n")
+}
+
+/** A codicon and a word for what became of a setting, for a Markdown string with theme icons on. */
+function settingMark(setting: Setting, final: unknown): string {
+    switch (setting.status) {
+        case "wins":
+            return "$(pass-filled) *final*"
+        case "overridden":
+            return JSON.stringify(final) === JSON.stringify(setting.value)
+                ? "$(pass) *same as final*"
+                : "$(circle-slash) *overridden*"
+        case "replaced":
+            return "$(replace) *replaced*"
+        case "deleted":
+            return "$(trash) *deleted*"
+    }
 }
 
 function siteLink(release: Release, layerIndex: number, path: ValuePath): string | undefined {

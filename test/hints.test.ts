@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { beforeAll, describe, expect, it } from "vitest"
 import { explain } from "../src/coalesce"
 import { annotatedFinalValues } from "../src/finalValues"
-import { templateHints, valueHints } from "../src/hints"
+import { chainMarkdown, templateHints, valueHints } from "../src/hints"
 import type { Release } from "../src/release"
 import { findReleases, loadRelease } from "../src/workspace"
 import { FIXTURES, fixtureCheckout } from "./fixtures"
@@ -126,6 +126,20 @@ describe("the hints", () => {
             (hint) => hint.label
         )
         expect(labels).toEqual(["20", "120"])
+    })
+})
+
+describe("the hover chain", () => {
+    it("marks each setting with what became of it", () => {
+        const chain = chainMarkdown(release, ["replicas"], BASE)
+        expect(chain).toContain("$(circle-slash) *overridden* · [values-base.yaml]")
+        expect(chain).toContain("$(pass-filled) *final* · [helm.values]")
+        expect(chain).not.toContain("*not set*")
+    })
+
+    it("lists the layers that leave the path alone once asked to", () => {
+        const chain = chainMarkdown(release, ["replicas"], BASE, true)
+        expect(chain).toContain("$(circle-large-outline) *not set* · [envs/prod.yaml]")
     })
 })
 

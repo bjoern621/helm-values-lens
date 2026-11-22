@@ -243,6 +243,10 @@ class Lens implements vscode.Disposable {
         return vscode.workspace.getConfiguration("helmValuesLens").get("helmPath", "helm")
     }
 
+    private showAllLayers(): boolean {
+        return vscode.workspace.getConfiguration("helmValuesLens").get("hover.showAllLayers", true)
+    }
+
     private renderOnSave(): boolean {
         return vscode.workspace.getConfiguration("helmValuesLens").get("renderOnSave", true)
     }
@@ -559,7 +563,8 @@ class Lens implements vscode.Disposable {
             const inlay = new vscode.InlayHint(new vscode.Position(line, column), hint.label)
             inlay.paddingLeft = true
             inlay.tooltip = new vscode.MarkdownString(
-                chainMarkdown(hint.release, hint.path, document.uri.fsPath)
+                chainMarkdown(hint.release, hint.path, document.uri.fsPath, this.showAllLayers()),
+                true
             )
             return inlay
         })
@@ -591,7 +596,7 @@ class Lens implements vscode.Disposable {
             }
         }
         if (sections.length === 0) return undefined
-        const markdown = new vscode.MarkdownString([...new Set(sections)].join("\n\n---\n\n"))
+        const markdown = new vscode.MarkdownString([...new Set(sections)].join("\n\n---\n\n"), true)
         markdown.isTrusted = false
         const range = new vscode.Range(
             position.line,
@@ -603,7 +608,7 @@ class Lens implements vscode.Disposable {
     }
 
     private chainWithResources(release: Release, path: readonly string[], fsPath: string): string {
-        const chain = chainMarkdown(release, path, fsPath)
+        const chain = chainMarkdown(release, path, fsPath, this.showAllLayers())
         const rendered = this.rendered.get(release.spec.id)
         if (rendered === undefined) return chain
         const holders = resourcesHolding(rendered, valueAt(release.trace.final, path))
