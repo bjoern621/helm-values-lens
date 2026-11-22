@@ -36,12 +36,17 @@ export type LayerSource =
           sites: Map<string, KeySite>
       }
 
-/** A Helm release that an Argo CD Application renders. */
+/** A Helm release, as a deployment tool such as Argo CD or Helmfile describes it. */
 export interface ReleaseSpec {
-    /** `metadata.name` of the Application. */
+    /** Tells two releases of one name apart, such as one Application rendered once per cluster. */
+    id: string
+    /** The name that the editor shows, such as `metadata.name` of an Application. */
     name: string
+    /** Names what describes the release, such as "Argo CD Application" or "Helmfile release". */
+    origin: string
+    /** The file that describes the release. */
     appFile: string
-    /** The line of `metadata.name`, where the editor shows the summary of the release. */
+    /** The line in `appFile` where the editor shows the summary of the release. */
     appLine: number
     releaseName: string
     namespace: string | undefined
@@ -87,10 +92,13 @@ export function readApplications(
         )
         if (helmSource === undefined) continue
         const release = readRelease(fsPath, text, helmSource, sources, checkoutOf, at)
+        const appLine = nameNode?.range ? at(nameNode.range[0]).line : 0
         releases.push({
+            id: `${fsPath}:${appLine}:${name}`,
             name,
+            origin: "Argo CD Application",
             appFile: fsPath,
-            appLine: nameNode?.range ? at(nameNode.range[0]).line : 0,
+            appLine,
             releaseName: release.releaseName ?? name,
             namespace:
                 (scalarAt(mapAt(spec, "destination"), "namespace") as string | undefined) ??
