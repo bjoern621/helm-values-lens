@@ -319,7 +319,7 @@ function scalarAt(map: YAMLMap | undefined, key: string): unknown {
     return isScalar(value) ? value.value : undefined
 }
 
-/** Turns a Git URL into a form that two spellings of one repository share: `github.com/bjoern621/hh-cluster-infra`. */
+/** Turns a Git URL into a form that two spellings of one repository share: `git.example.com/acme/gitops`. */
 export function normalizeRepoURL(url: string): string {
     return url
         .trim()
