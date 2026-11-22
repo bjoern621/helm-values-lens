@@ -112,7 +112,12 @@ export function readApplications(
     return releases
 }
 
-function readRelease(
+/**
+ * Reads the chart and the layers of the Helm source of an Application.
+ * `sources` holds every source of the Application, for the `ref` that a `$ref/path` values file names.
+ * `at` maps an offset in `text` to its position, for the sites of the layers.
+ */
+export function readRelease(
     fsPath: string,
     text: string,
     source: YAMLMap,
@@ -296,7 +301,8 @@ function blockOffset(
     return undefined
 }
 
-function sourcesOf(spec: YAMLMap): YAMLMap[] {
+/** Lists the `sources` of an Application spec, or its one `source`. */
+export function sourcesOf(spec: YAMLMap): YAMLMap[] {
     const sources = spec.get("sources", true)
     if (isSeq(sources)) return sources.items.filter((item): item is YAMLMap => isMap(item))
     const source = spec.get("source", true)

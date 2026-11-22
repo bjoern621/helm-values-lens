@@ -1,0 +1,3 @@
+{
+    "cluster": { "name": "us", "region": "us-east-1", "replicas": 3 }
+}

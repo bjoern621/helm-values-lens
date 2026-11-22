@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: tiers
+  namespace: argocd
+spec:
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: https://example.com/fixtures.git
+              revision: HEAD
+              files:
+                - path: appset/clusters/*/config.json
+          - list:
+              elements:
+                - tier: frontend
+                  region: "{{cluster.region}}"
+                - tier: backend
+                  region: "{{cluster.region}}"
+  template:
+    metadata:
+      name: "{{cluster.name}}-{{tier}}"
+    spec:
+      project: default
+      destination:
+        namespace: "{{path.basename}}"
+      source:
+        repoURL: https://example.com/fixtures.git
+        path: charts/app
+        helm:
+          values: |
+            replicas: {{cluster.replicas}}
+            podAnnotations:
+              region: "{{region}}"

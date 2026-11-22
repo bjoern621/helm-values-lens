@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: envs
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: prod
+            replicas: "4"
+          - env: staging
+            replicas: "1"
+  template:
+    metadata:
+      name: "envs-{{env}}"
+    spec:
+      project: default
+      destination:
+        namespace: "{{env}}"
+      sources:
+        - repoURL: https://example.com/fixtures.git
+          path: charts/app
+          helm:
+            valueFiles:
+              - values-base.yaml
+              - $values/appset/values/{{env}}.yaml
+            values: |
+              replicas: {{replicas}}
+            parameters:
+              - name: image.tag
+                value: "{{env}}"
+        - repoURL: https://example.com/fixtures.git
+          ref: values

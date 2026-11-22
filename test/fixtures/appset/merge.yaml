@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: sizes
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - merge:
+        mergeKeys:
+          - name
+        generators:
+          - list:
+              elements:
+                - name: small
+                  size: "1"
+                - name: large
+                  size: "1"
+          - list:
+              elements:
+                - name: large
+                  size: "9"
+  template:
+    metadata:
+      name: "sizes-{{ .name }}"
+    spec:
+      project: default
+      destination:
+        namespace: sizes
+      source:
+        repoURL: https://example.com/fixtures.git
+        path: charts/app
+        helm:
+          parameters:
+            - name: cache.size
+              value: "{{ .size }}"
