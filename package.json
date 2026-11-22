@@ -2,7 +2,7 @@
     "name": "helm-values-lens",
     "displayName": "Helm Values Lens",
     "description": "Shows where each Helm value gets set, which layer overrides it and the value that the chart renders with. Reads the value order from Argo CD Applications.",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "publisher": "bjoern621",
     "license": "MIT",
     "private": true,
@@ -136,7 +136,7 @@
         "trace": "node esbuild.mjs && node dist/cli.js",
         "format": "prettier --write .",
         "vscode:prepublish": "npm run build",
-        "package": "vsce package"
+        "package": "vsce package --no-rewrite-relative-links"
     },
     "devDependencies": {
         "@types/node": "22.20.5",
