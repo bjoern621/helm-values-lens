@@ -14,9 +14,14 @@ import type { LoadedChart } from "./chart"
 import { buildRelease, type ReadText, readFromDisk, type Release } from "./release"
 import { type Rendered, renderRelease } from "./render"
 import { readApplicationSets } from "./sources/applicationSet"
+import { readFluxHelmReleases } from "./sources/flux"
+import { readHelmfile } from "./sources/helmfile"
+import { readKustomizeHelmCharts } from "./sources/kustomize"
 import type { SourceContext, SourceReader, WorkspaceFile } from "./sources/types"
 
 /** Folders that hold no release: build output and dependencies. Hidden folders get skipped as well. */
+/** The files that may describe a release: YAML, Helmfile templates and a kustomization without extension. */
+export const RELEASE_FILE = /(\.ya?ml|\.gotmpl|^Kustomization)$/
 const SKIPPED_DIRS = new Set(["node_modules", "dist", "out", "target", "vendor"])
 
 /** How deep Applications that a chart renders may nest, counting the release that renders the first ones. */
@@ -99,7 +104,7 @@ export function indexWorkspace(roots: readonly string[]): WorkspaceIndex {
                 // Helm renders the templates of a chart. Its `charts/` folder holds its dependencies.
                 if (isChart && (entry.name === "templates" || entry.name === "charts")) continue
                 walk(join(dir, entry.name))
-            } else if (/\.ya?ml$/.test(entry.name)) {
+            } else if (RELEASE_FILE.test(entry.name)) {
                 index.files.push(join(dir, entry.name))
             }
         }
@@ -201,6 +206,14 @@ function folderEndingWith(index: WorkspaceIndex, key: string): string | undefine
 const argoReader: SourceReader = (file, context) =>
     readApplications(file.fsPath, file.text, context.checkoutOf)
 
+const DEFAULT_READERS: readonly SourceReader[] = [
+    argoReader,
+    readApplicationSets,
+    readHelmfile,
+    readFluxHelmReleases,
+    readKustomizeHelmCharts
+]
+
 /**
  * Lists the releases that the files of the workspace describe, without rendering anything.
  * A chart that no release uses gets one release with its defaults and one per values file beside `values.yaml`.
@@ -231,7 +244,7 @@ function discoverSpecs(
         }
     }
     const context: SourceContext = { files, checkoutOf }
-    const readers = [argoReader, readApplicationSets, ...(options.readers ?? [])]
+    const readers = [...DEFAULT_READERS, ...(options.readers ?? [])]
     const specs: ReleaseSpec[] = []
     for (const file of files) {
         for (const reader of readers) {

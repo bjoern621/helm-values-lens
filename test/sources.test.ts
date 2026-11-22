@@ -10,7 +10,7 @@ import { readFluxHelmReleases } from "../src/sources/flux"
 import { readHelmfile } from "../src/sources/helmfile"
 import { readKustomizeHelmCharts } from "../src/sources/kustomize"
 import type { SourceContext, SourceReader, WorkspaceFile } from "../src/sources/types"
-import { loadRelease, yamlFiles } from "../src/workspace"
+import { indexWorkspace, loadRelease } from "../src/workspace"
 import { pathKey, type Position } from "../src/yamlPaths"
 import { FIXTURES, fixtureCheckout } from "./fixtures"
 
@@ -36,10 +36,10 @@ function onDisk(fsPath: string): WorkspaceFile {
     return { fsPath, text: readFileSync(fsPath, "utf8") }
 }
 
-/** The YAML files of the fixture repository, with `extra` in place of a file of the same path. */
+/** The release files of the fixture repository, with `extra` in place of a file of the same path. */
 function contextWith(...extra: WorkspaceFile[]): SourceContext {
-    const files = yamlFiles(FIXTURES)
-        .filter((fsPath) => !extra.some((file) => file.fsPath === fsPath))
+    const files = indexWorkspace([FIXTURES])
+        .files.filter((fsPath) => !extra.some((file) => file.fsPath === fsPath))
         .map(onDisk)
     return { files: [...files, ...extra], checkoutOf: fixtureCheckout }
 }
