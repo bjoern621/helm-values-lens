@@ -1,4 +1,4 @@
-import { join, normalize } from "node:path"
+import { join, normalize, resolve } from "node:path"
 import {
     isMap,
     isScalar,
@@ -44,6 +44,8 @@ export interface ReleaseSpec {
     name: string
     /** Names what describes the release, such as "Argo CD Application" or "Helmfile release". */
     origin: string
+    /** The name of the release whose render produced this one, for an Application that a chart renders. */
+    parent?: string
     /** The file that describes the release. */
     appFile: string
     /** The line in `appFile` where the editor shows the summary of the release. */
@@ -132,7 +134,7 @@ function readRelease(
         }
     } else if (sourcePath !== undefined) {
         const checkout = checkoutOf(repoURL)
-        chartDir = checkout === undefined ? undefined : join(checkout, String(sourcePath))
+        chartDir = checkout === undefined ? undefined : resolve(checkout, String(sourcePath))
         chart =
             chartDir === undefined
                 ? { kind: "unresolved", reason: `${repoURL} is not checked out in the workspace` }

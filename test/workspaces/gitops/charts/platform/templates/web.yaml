@@ -1,0 +1,20 @@
+{{- if .Values.web.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: web-{{ .Values.cluster.name }}
+  namespace: argocd
+spec:
+  destination:
+    namespace: web
+  source:
+    repoURL: https://git.example.com/acme/gitops.git
+    path: charts/web
+    helm:
+      valueFiles:
+        - values-{{ .Values.cluster.name }}.yaml
+      valuesObject:
+        replicas: {{ .Values.web.replicas }}
+        ingress:
+          host: web.{{ .Values.cluster.domain }}
+{{- end }}

@@ -1,0 +1,6 @@
+cluster:
+  name: dev
+  domain: dev.example.com
+web:
+  enabled: true
+  replicas: 1
