@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, isAbsolute, join, normalize, resolve, sep } from "node:path"
 import { parseDocument } from "yaml"
 import {
@@ -71,7 +71,7 @@ export interface DiscoveryOptions {
     /** Repository URLs mapped to folders, for a checkout whose remote names another URL. */
     repositories?: Record<string, string>
     configured?: readonly ConfiguredRelease[]
-    /** Readers besides the one for Argo CD Applications. */
+    /** Readers besides the built-in ones. */
     readers?: readonly SourceReader[]
 }
 
@@ -151,6 +151,32 @@ function holdsApplication(text: string): boolean {
     return text.includes("argoproj.io") && /kind:\s*Application\b/.test(text)
 }
 
+const remotes = new Map<string, { stamp: number; urls: string[] }>()
+
+/** The remote URLs of a checkout, read again once its `.git/config` changes. */
+function remotesOf(checkout: string): string[] {
+    let stamp = -1
+    try {
+        stamp = statSync(join(checkout, ".git", "config")).mtimeMs
+    } catch {
+        // A worktree keeps its config elsewhere, so its remotes get read on every call.
+    }
+    const known = remotes.get(checkout)
+    if (known !== undefined && stamp !== -1 && known.stamp === stamp) return known.urls
+    let urls: string[] = []
+    try {
+        const output = execFileSync("git", ["-C", checkout, "remote", "-v"], {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"]
+        })
+        urls = output.split("\n").flatMap((line) => line.split(/\s+/)[1] ?? [])
+    } catch {
+        // A broken checkout maps no URL.
+    }
+    remotes.set(checkout, { stamp, urls })
+    return urls
+}
+
 /**
  * Maps a repository URL to the folder of its checkout.
  * The `repositories` setting goes first, then the remotes of every checkout in the workspace.
@@ -163,19 +189,8 @@ export function checkoutsOf(
 ): CheckoutOf {
     const byRemote = new Map<string, string>()
     for (const checkout of index.checkouts) {
-        try {
-            const remotes = execFileSync("git", ["-C", checkout, "remote", "-v"], {
-                encoding: "utf8",
-                stdio: ["ignore", "pipe", "ignore"]
-            })
-            for (const line of remotes.split("\n")) {
-                const url = line.split(/\s+/)[1]
-                if (url !== undefined && !byRemote.has(normalizeRepoURL(url)))
-                    byRemote.set(normalizeRepoURL(url), checkout)
-            }
-        } catch {
-            // A broken checkout maps no URL.
-        }
+        for (const url of remotesOf(checkout))
+            if (!byRemote.has(normalizeRepoURL(url))) byRemote.set(normalizeRepoURL(url), checkout)
     }
     const root = roots[0] ?? "/"
     const configured = new Map<string, string>()
@@ -433,7 +448,11 @@ export async function discover(
     roots: readonly string[],
     cacheDir: string,
     helmPath: string,
-    options: DiscoveryOptions & { charts?: Map<string, LoadedChart> } = {}
+    options: DiscoveryOptions & {
+        charts?: Map<string, LoadedChart>
+        /** Renders of an earlier discovery, taken in place of rendering the same release again. */
+        renders?: ReadonlyMap<string, Rendered>
+    } = {}
 ): Promise<Discovery> {
     const readText = options.readText ?? readFromDisk
     const charts = options.charts ?? new Map<string, LoadedChart>()
@@ -462,9 +481,9 @@ export async function discover(
         const dir = release.chart.dir
         if (!rendersApps.has(dir)) rendersApps.set(dir, rendersApplications(dir))
         if (rendersApps.get(dir) !== true) return
-        let rendered: Rendered
+        let rendered = options.renders?.get(spec.id)
         try {
-            rendered = await renderRelease(release, helmPath)
+            rendered ??= await renderRelease(release, helmPath)
         } catch (error) {
             discovery.renderErrors.set(spec.id, (error as Error).message)
             return
