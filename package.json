@@ -14,7 +14,10 @@
     ],
     "main": "./dist/extension.js",
     "activationEvents": [
-        "workspaceContains:**/*.yaml"
+        "workspaceContains:**/*.yaml",
+        "workspaceContains:**/*.yml",
+        "workspaceContains:**/*.gotmpl",
+        "workspaceContains:**/Kustomization"
     ],
     "contributes": {
         "commands": [
@@ -42,6 +45,16 @@
                 "command": "helmValuesLens.refresh",
                 "title": "Reload Releases",
                 "category": "Helm Values Lens"
+            },
+            {
+                "command": "helmValuesLens.selectRelease",
+                "title": "Select Release for Hints",
+                "category": "Helm Values Lens"
+            },
+            {
+                "command": "helmValuesLens.addRelease",
+                "title": "Add Release from a Chart and Values Files",
+                "category": "Helm Values Lens"
             }
         ],
         "configuration": {
@@ -56,6 +69,62 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Renders each release with helm template once the workspace opens and after each save of a YAML file."
+                },
+                "helmValuesLens.releases": {
+                    "type": "array",
+                    "default": [],
+                    "markdownDescription": "Releases that no Argo CD, Helmfile, Flux or Kustomize file describes. Each takes a chart folder and its values files in the order that Helm merges them, the last one winning. Paths are relative to the first workspace folder. The command `Helm Values Lens: Add Release from a Chart and Values Files` adds one.",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "name",
+                            "chart"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Name shown in the hints."
+                            },
+                            "chart": {
+                                "type": "string",
+                                "description": "Chart folder, relative to the first workspace folder."
+                            },
+                            "valueFiles": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Values files, lowest first, relative to the first workspace folder."
+                            },
+                            "set": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": [
+                                        "string",
+                                        "number",
+                                        "boolean"
+                                    ]
+                                },
+                                "description": "Values as --set passes them, keyed by their dotted path."
+                            },
+                            "namespace": {
+                                "type": "string"
+                            },
+                            "releaseName": {
+                                "type": "string",
+                                "description": "Release name that the templates read as .Release.Name. Defaults to name."
+                            }
+                        }
+                    }
+                },
+                "helmValuesLens.repositories": {
+                    "type": "object",
+                    "default": {},
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "markdownDescription": "Repository URLs mapped to folders, relative to the first workspace folder. Needed for a repository whose checkout has no remote with that URL and whose folder path does not end with the path of the URL. Example: `{ \"https://git.example.com/acme/gitops.git\": \"gitops\" }`."
                 }
             }
         }
