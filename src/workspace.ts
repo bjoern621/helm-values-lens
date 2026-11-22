@@ -13,6 +13,7 @@ import { chartDir, loadChart } from "./chart"
 import type { LoadedChart } from "./chart"
 import { buildRelease, type ReadText, readFromDisk, type Release } from "./release"
 import { type Rendered, renderRelease } from "./render"
+import { readApplicationSets } from "./sources/applicationSet"
 import type { SourceContext, SourceReader, WorkspaceFile } from "./sources/types"
 
 /** Folders that hold no release: build output and dependencies. Hidden folders get skipped as well. */
@@ -230,7 +231,7 @@ function discoverSpecs(
         }
     }
     const context: SourceContext = { files, checkoutOf }
-    const readers = [argoReader, ...(options.readers ?? [])]
+    const readers = [argoReader, readApplicationSets, ...(options.readers ?? [])]
     const specs: ReleaseSpec[] = []
     for (const file of files) {
         for (const reader of readers) {
