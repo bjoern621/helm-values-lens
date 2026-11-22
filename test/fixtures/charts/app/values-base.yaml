@@ -1,0 +1,6 @@
+replicas: 2
+resources:
+  limits:
+    cpu: 200m
+tolerations:
+  - key: a

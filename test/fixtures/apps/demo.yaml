@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo
+  namespace: argocd
+spec:
+  destination:
+    namespace: demo
+  sources:
+    - repoURL: https://example.com/fixtures.git
+      path: charts/app
+      helm:
+        releaseName: demo-release
+        valueFiles:
+          - values-base.yaml
+          - $values/envs/prod.yaml
+        values: |
+          replicas: 3
+          podAnnotations:
+            team: x
+        parameters:
+          - name: image.repository
+            value: myrepo
+          - name: cache.ttl
+            value: "120"
+          - name: podAnnotations.note
+            value: "true"
+            forceString: true
+    - repoURL: https://example.com/fixtures.git
+      ref: values

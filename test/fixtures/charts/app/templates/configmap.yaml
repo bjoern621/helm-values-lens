@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}
+data:
+  image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+  replicas: "{{ .Values.replicas }}"
+  limits: {{ toYaml .Values.resources.limits | quote }}
+  region: {{ .Values.global.region }}

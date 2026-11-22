@@ -1,0 +1,123 @@
+import { readFileSync } from "node:fs"
+import { homedir } from "node:os"
+import { join } from "node:path"
+import { beforeAll, describe, expect, it } from "vitest"
+import { explain } from "../src/coalesce"
+import { annotatedFinalValues } from "../src/finalValues"
+import { templateHints, valueHints } from "../src/hints"
+import type { Release } from "../src/release"
+import { findReleases, loadRelease } from "../src/workspace"
+import { FIXTURES, fixtureCheckout } from "./fixtures"
+
+const APP = join(FIXTURES, "apps/demo.yaml")
+const BASE = join(FIXTURES, "charts/app/values-base.yaml")
+const PROD = join(FIXTURES, "envs/prod.yaml")
+const CHART_VALUES = join(FIXTURES, "charts/app/values.yaml")
+
+let release: Release
+
+beforeAll(async () => {
+    const [spec] = findReleases([FIXTURES], undefined, fixtureCheckout)
+    release = await loadRelease(spec!, join(homedir(), ".cache", "helm-values-lens"), "helm")
+})
+
+const lineOf = (fsPath: string, text: string) =>
+    readFileSync(fsPath, "utf8")
+        .split("\n")
+        .findIndex((line) => line.includes(text))
+
+const hintOn = (fsPath: string, text: string) =>
+    valueHints(fsPath, [release]).find((hint) => hint.position.line === lineOf(fsPath, text))?.label
+
+describe("the Application", () => {
+    it("orders the layers as Argo CD does", () => {
+        expect(release.spec.releaseName).toBe("demo-release")
+        expect(release.trace.layers.map((layer) => layer.label)).toEqual([
+            "cache chart values.yaml",
+            "chart values.yaml",
+            "values-base.yaml",
+            "envs/prod.yaml",
+            "helm.values",
+            "helm.parameters"
+        ])
+    })
+
+    it("resolves $values to the checkout of the ref source", () => {
+        expect(release.trace.layers[3]!.fsPath).toBe(PROD)
+    })
+})
+
+describe("the trace", () => {
+    it("lets the last layer win and marks the earlier ones overridden", () => {
+        const { final, settings } = explain(release.trace, ["replicas"])
+        expect(final).toBe(3)
+        expect(settings.map((setting) => setting.status)).toEqual([
+            "overridden",
+            "overridden",
+            "wins"
+        ])
+    })
+
+    it("deletes a key that a layer sets to null", () => {
+        expect(explain(release.trace, ["resources", "limits", "memory"]).final).toBeUndefined()
+        expect(explain(release.trace, ["legacy", "mode"]).settings[0]!.status).toBe("deleted")
+    })
+
+    it("replaces a list as a whole", () => {
+        expect(explain(release.trace, ["tolerations"]).final).toEqual([{ key: "a" }])
+    })
+
+    it("lets the parent override a dependency under its alias", () => {
+        expect(explain(release.trace, ["cache", "size"]).final).toBe(20)
+        expect(explain(release.trace, ["cache", "ttl"]).final).toBe(120)
+    })
+
+    it("types --set values and keeps forceString text", () => {
+        expect(explain(release.trace, ["podAnnotations", "note"]).final).toBe("true")
+    })
+})
+
+describe("the hints", () => {
+    it("name the layer that overrides a value and the final value", () => {
+        expect(hintOn(BASE, "replicas: 2")).toBe("overridden by helm.values: 3")
+        expect(hintOn(CHART_VALUES, "tag:")).toBe("overridden by envs/prod.yaml: 2.0")
+    })
+
+    it("name the layer that deletes a value", () => {
+        expect(hintOn(CHART_VALUES, "mode: a")).toBe("deleted by envs/prod.yaml")
+    })
+
+    it("sit on the lines of the inline block in the Application", () => {
+        const hints = valueHints(APP, [release])
+        expect(hints.some((hint) => hint.position.line === lineOf(APP, "replicas: 3"))).toBe(false)
+        const parameter = hints.find(
+            (hint) => hint.position.line === lineOf(APP, "name: image.repository")
+        )
+        expect(parameter).toBeUndefined()
+    })
+
+    it("show the final value after each .Values read in a template", () => {
+        const file = join(FIXTURES, "charts/app/templates/configmap.yaml")
+        const labels = templateHints(file, readFileSync(file, "utf8"), [release]).map(
+            (hint) => hint.label
+        )
+        expect(labels).toEqual(["myrepo", "2.0", "3", "{1 keys}", "eu"])
+    })
+
+    it("read the values of a dependency under its alias", () => {
+        const file = join(FIXTURES, "charts/app/charts/sub/templates/configmap.yaml")
+        const labels = templateHints(file, readFileSync(file, "utf8"), [release]).map(
+            (hint) => hint.label
+        )
+        expect(labels).toEqual(["20", "120"])
+    })
+})
+
+describe("the final values", () => {
+    it("name the file and line that set each value", () => {
+        const text = annotatedFinalValues(release, FIXTURES)
+        expect(text).toContain(`replicas: 3 # helm.values:${lineOf(APP, "replicas: 3") + 1}`)
+        expect(text).toContain('tag: "2.0" # envs/prod.yaml:2')
+        expect(text).toContain("repository: myrepo # helm.parameters")
+    })
+})

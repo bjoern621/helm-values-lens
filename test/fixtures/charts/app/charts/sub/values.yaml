@@ -1,0 +1,4 @@
+size: 1
+ttl: 60
+global:
+  tier: free
