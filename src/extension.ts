@@ -9,15 +9,24 @@ import {
     chainMarkdown,
     type Hint,
     releaseTitle,
+    type SettingSite,
+    settingSites,
     siteAt,
     siteEnd,
     templateHints,
     templatePrefix,
     valueHints
 } from "./hints"
-import type { Release } from "./release"
+import {
+    removableAsDefault,
+    removeKeysEdits,
+    renameKeyEdit,
+    similarKeys,
+    type TextEdit
+} from "./quickFixes"
+import { isUnknownKey, type Release } from "./release"
 import { changedResources, type Rendered, renderRelease, resourcesHolding } from "./render"
-import type { Position } from "./yamlPaths"
+import { dottedPath, pathKey, type Position } from "./yamlPaths"
 import {
     type ConfiguredRelease,
     discover,
@@ -89,6 +98,14 @@ class Lens implements vscode.Disposable {
             vscode.languages.registerHoverProvider(selector, {
                 provideHover: (document, position) => this.hover(document, position)
             }),
+            vscode.languages.registerCodeActionsProvider(
+                selector,
+                {
+                    provideCodeActions: (document, range, context) =>
+                        this.codeActions(document, range, context)
+                },
+                { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }
+            ),
             vscode.languages.registerCodeLensProvider(selector, {
                 onDidChangeCodeLenses: changes,
                 provideCodeLenses: (document) => this.codeLenses(document)
@@ -607,6 +624,98 @@ class Lens implements vscode.Disposable {
         return new vscode.Hover(markdown, range)
     }
 
+    /**
+     * Offers to remove a key equal to the chart default, alone or with every such key in the file, without a marker.
+     * Offers to rename an unknown key to a known one a typo away, or to remove it.
+     */
+    private codeActions(
+        document: vscode.TextDocument,
+        range: vscode.Range,
+        context: vscode.CodeActionContext
+    ): vscode.CodeAction[] {
+        const text = document.getText()
+        const sites = settingSites(document.uri.fsPath, this.releases).filter(
+            (site) => site.release.trace.layers[site.layerIndex]!.offset === undefined
+        )
+        const byPath = new Map<string, SettingSite[]>()
+        for (const site of sites) {
+            const key = pathKey(site.path)
+            byPath.set(key, [...(byPath.get(key) ?? []), site])
+        }
+        const here = [...byPath.values()].filter((group) =>
+            group.some(
+                (site) => site.key.line >= range.start.line && site.key.line <= range.end.line
+            )
+        )
+        const removable = [...byPath.values()]
+            .filter((group) =>
+                group.every((site) => removableAsDefault(site.release, site.layerIndex, site.path))
+            )
+            .map((group) => group[0]!.path)
+        const actions: vscode.CodeAction[] = []
+        const action = (
+            title: string,
+            edits: readonly TextEdit[] | undefined,
+            preferred = false
+        ) => {
+            if (edits === undefined || edits.length === 0) return undefined
+            const fix = new vscode.CodeAction(title, vscode.CodeActionKind.QuickFix)
+            fix.edit = new vscode.WorkspaceEdit()
+            for (const edit of edits)
+                fix.edit.replace(
+                    document.uri,
+                    new vscode.Range(
+                        document.positionAt(edit.start),
+                        document.positionAt(edit.end)
+                    ),
+                    edit.text
+                )
+            fix.isPreferred = preferred
+            actions.push(fix)
+            return fix
+        }
+        for (const group of here) {
+            const path = group[0]!.path
+            const name = dottedPath(path)
+            if (removable.some((other) => pathKey(other) === pathKey(path)))
+                action(`Remove ${name}, equal to the chart default`, removeKeysEdits(text, [path]))
+            const unknown = group.filter((site) => isUnknownKey(site.release, site.path))
+            if (unknown.length === 0) continue
+            const markers = context.diagnostics.filter(
+                (marker) =>
+                    marker.source === "Helm Values Lens" &&
+                    marker.range.start.line === group[0]!.key.line
+            )
+            const candidates = [
+                ...new Set(unknown.flatMap((site) => similarKeys(site.release, path)))
+            ]
+            candidates.slice(0, 3).forEach((candidate, index) => {
+                const fix = action(
+                    `Rename ${path.at(-1)} to ${candidate}`,
+                    singleEdit(renameKeyEdit(text, path, candidate)),
+                    index === 0
+                )
+                if (fix !== undefined) fix.diagnostics = markers
+            })
+            if (unknown.length === group.length) {
+                const fix = action(
+                    `Remove ${name}, unknown to the chart`,
+                    removeKeysEdits(text, [path])
+                )
+                if (fix !== undefined) fix.diagnostics = markers
+            }
+        }
+        const onLine = here.some((group) =>
+            removable.some((path) => pathKey(path) === pathKey(group[0]!.path))
+        )
+        if (onLine && removable.length > 1)
+            action(
+                `Remove all ${removable.length} keys equal to the chart default in this file`,
+                removeKeysEdits(text, removable)
+            )
+        return actions
+    }
+
     private chainWithResources(release: Release, path: readonly string[], fsPath: string): string {
         const chain = chainMarkdown(release, path, fsPath, this.showAllLayers())
         const rendered = this.rendered.get(release.spec.id)
@@ -788,4 +897,8 @@ function chartFiles(dir: string): string[] {
     }
     walk(join(dir, "templates"))
     return files
+}
+
+function singleEdit(edit: TextEdit | undefined): TextEdit[] | undefined {
+    return edit === undefined ? undefined : [edit]
 }

@@ -18,9 +18,14 @@ A repository holding one of those needs no settings.
 - Next to a value equal to the chart default: `= chart default`.
 - An information marker on a key that the chart neither defaults nor reads, most likely a misspelled or outdated key.
 - Next to each `.Values` read in a chart template: the final value of the release.
-- On hover over a key: every layer that sets it, lowest first, each linked to its line, for every release that reads the file.
+- On hover over a key or a `.Values` read: every layer of each release that reads the file, lowest first, each linked to its line.
+  A mark names what became of the layer's value: final, same as final, overridden, replaced, deleted or not set.
 - In the same hover, after a render: the rendered resources whose text holds the value.
   A chart default with the same text matches as well.
+- A quick fix on a key equal to the chart default, which removes it or every such key in the file.
+  A chart upgrade that changes the default then reaches the release.
+  The key itself stays valid and gets no marker.
+- A quick fix on an unknown key, which renames it to a key of the chart a typo away or removes it.
 - Above the release in its Application, Helmfile, HelmRelease or kustomization: the chart, the number of values layers, a link to the files of the chart and the state of the last render.
 - A problem marker on the release where its chart could not be loaded or `helm template` could not render it.
 
@@ -123,12 +128,13 @@ code --install-extension helm-values-lens.vsix
 
 ## Settings
 
-| Setting                       | Default | Effect                                                                                               |
-| ----------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| `helmValuesLens.helmPath`     | `helm`  | The binary that pulls and renders the charts.                                                        |
-| `helmValuesLens.renderOnSave` | `true`  | Renders each release with `helm template` once the workspace opens and after each save.              |
-| `helmValuesLens.releases`     | `[]`    | Releases that no deployment file describes, each a chart folder with its values files, lowest first. |
-| `helmValuesLens.repositories` | `{}`    | Repository URLs mapped to folders, for a checkout whose remote and path name neither URL.            |
+| Setting                              | Default | Effect                                                                                               |
+| ------------------------------------ | ------- | ---------------------------------------------------------------------------------------------------- |
+| `helmValuesLens.helmPath`            | `helm`  | The binary that pulls and renders the charts.                                                        |
+| `helmValuesLens.hover.showAllLayers` | `true`  | Lists every values layer of the release in the hover, the ones that leave the key alone included.    |
+| `helmValuesLens.renderOnSave`        | `true`  | Renders each release with `helm template` once the workspace opens and after each save.              |
+| `helmValuesLens.releases`            | `[]`    | Releases that no deployment file describes, each a chart folder with its values files, lowest first. |
+| `helmValuesLens.repositories`        | `{}`    | Repository URLs mapped to folders, for a checkout whose remote and path name neither URL.            |
 
 A release in the setting, with paths relative to the first workspace folder:
 
