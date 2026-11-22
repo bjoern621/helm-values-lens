@@ -104,6 +104,22 @@ describe("the hints", () => {
         expect(labels).toEqual(["myrepo", "2.0", "3", "{1 keys}", "eu"])
     })
 
+    it("span the whole .Values path in a template and the whole setting in a values file", () => {
+        const file = join(FIXTURES, "charts/app/templates/configmap.yaml")
+        const lines = readFileSync(file, "utf8").split("\n")
+        const spans = templateHints(file, lines.join("\n"), [release]).map((hint) =>
+            lines[hint.start.line]!.slice(hint.start.column, hint.position.column)
+        )
+        expect(spans[0]).toBe(".Values.image.repository")
+        const base = readFileSync(BASE, "utf8").split("\n")
+        const replicas = valueHints(BASE, [release]).find(
+            (hint) => hint.position.line === lineOf(BASE, "replicas: 2")
+        )!
+        expect(
+            base[replicas.start.line]!.slice(replicas.start.column, replicas.position.column)
+        ).toBe("replicas: 2")
+    })
+
     it("read the values of a dependency under its alias", () => {
         const file = join(FIXTURES, "charts/app/charts/sub/templates/configmap.yaml")
         const labels = templateHints(file, readFileSync(file, "utf8"), [release]).map(

@@ -10,12 +10,14 @@ import {
     type Hint,
     releaseTitle,
     siteAt,
+    siteEnd,
     templateHints,
     templatePrefix,
     valueHints
 } from "./hints"
 import type { Release } from "./release"
 import { changedResources, type Rendered, renderRelease, resourcesHolding } from "./render"
+import type { Position } from "./yamlPaths"
 import {
     type ConfiguredRelease,
     discover,
@@ -326,13 +328,19 @@ class Lens implements vscode.Disposable {
             fsPath: string,
             line: number,
             message: string,
-            severity: vscode.DiagnosticSeverity
+            severity: vscode.DiagnosticSeverity,
+            span?: { start: Position; end: Position }
         ) => {
-            const diagnostic = new vscode.Diagnostic(
-                new vscode.Range(line, 0, line, 999),
-                message,
-                severity
-            )
+            const range =
+                span === undefined
+                    ? new vscode.Range(line, 0, line, Number.MAX_SAFE_INTEGER)
+                    : new vscode.Range(
+                          span.start.line,
+                          span.start.column,
+                          span.end.line,
+                          span.end.column
+                      )
+            const diagnostic = new vscode.Diagnostic(range, message, severity)
             diagnostic.source = "Helm Values Lens"
             const list = byFile.get(fsPath) ?? []
             if (list.some((other) => other.message === message && other.range.start.line === line))
@@ -373,7 +381,8 @@ class Lens implements vscode.Disposable {
                     fsPath,
                     hint.position.line,
                     `${releaseTitle(hint.release.spec)}: the chart ${hint.release.chart.name} neither defaults nor reads ${hint.path.join(".")}`,
-                    Information
+                    Information,
+                    { start: hint.start, end: hint.position }
                 )
             }
         }
@@ -569,16 +578,28 @@ class Lens implements vscode.Disposable {
         )
         const line = document.lineAt(position.line).text
         const sections: string[] = []
+        const columns: number[] = []
         for (const release of releases) {
-            for (const site of siteAt(fsPath, at, [release]))
+            for (const site of siteAt(fsPath, at, [release])) {
                 sections.push(this.chainWithResources(site.release, site.path, fsPath))
-            for (const hint of templateHints(fsPath, line, [release]))
+                columns.push(site.key.column, Math.min(siteEnd(site).column, line.length))
+            }
+            for (const hint of templateHints(fsPath, line, [release])) {
+                if (at.column < hint.start.column || at.column > hint.position.column) continue
                 sections.push(this.chainWithResources(hint.release, hint.path, fsPath))
+                columns.push(hint.start.column, hint.position.column)
+            }
         }
         if (sections.length === 0) return undefined
         const markdown = new vscode.MarkdownString([...new Set(sections)].join("\n\n---\n\n"))
         markdown.isTrusted = false
-        return new vscode.Hover(markdown)
+        const range = new vscode.Range(
+            position.line,
+            Math.min(...columns),
+            position.line,
+            Math.max(...columns)
+        )
+        return new vscode.Hover(markdown, range)
     }
 
     private chainWithResources(release: Release, path: readonly string[], fsPath: string): string {

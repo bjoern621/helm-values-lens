@@ -7,6 +7,8 @@ export type HintKind = "overridden" | "deleted" | "replaced" | "default" | "unkn
 
 /** A note that the editor shows at one place in a file. */
 export interface Hint {
+    /** Where the key or the `.Values` read that the hint describes begins. */
+    start: Position
     position: Position
     kind: HintKind
     label: string
@@ -79,7 +81,14 @@ export function valueHints(fsPath: string, releases: readonly Release[]): Hint[]
                 : layerName(release, setting.byLayerIndex, fsPath)
         const final = valueAt(release.trace.final, path)
         const add = (kind: HintKind, label: string) =>
-            hints.push({ position: at, kind, label: prefix(release) + label, release, path })
+            hints.push({
+                start: site.key,
+                position: at,
+                kind,
+                label: prefix(release) + label,
+                release,
+                path
+            })
         if (setting.status === "overridden")
             add(
                 "overridden",
@@ -115,6 +124,7 @@ export function templateHints(fsPath: string, text: string, releases: readonly R
                 const position = { line: lineIndex, column: match.index + match[0].length }
                 const name = templated.length > 1 ? `${release.spec.name}: ` : ""
                 hints.push({
+                    start: { line: lineIndex, column: match.index },
                     position,
                     kind: "final",
                     label: `${name}${preview(final)}`,
@@ -137,7 +147,7 @@ export function templatePrefix(fsPath: string, release: Release): string[] | und
     return dependency === undefined ? undefined : [dependency.key]
 }
 
-/** The setting at `position` in the file, for the hover. A position inside a key counts. */
+/** The settings whose key or scalar value spans `position` in the file, for the hover. */
 export function siteAt(
     fsPath: string,
     position: Position,
@@ -145,8 +155,15 @@ export function siteAt(
 ): SettingSite[] {
     return settingSites(fsPath, releases).filter((site) => {
         if (site.key.line !== position.line) return false
-        return position.column >= site.key.column
+        return position.column >= site.key.column && position.column <= siteEnd(site).column
     })
+}
+
+/** The end of a setting on its key line: the end of a scalar value, or the end of the line for a map or a list. */
+export function siteEnd(site: SettingSite): Position {
+    return site.valueEnd !== undefined && site.valueEnd.line === site.key.line
+        ? site.valueEnd
+        : { line: site.key.line, column: Number.MAX_SAFE_INTEGER }
 }
 
 /** Renders the chain of one path as Markdown, lowest layer first, with the final value on top. */
