@@ -55,8 +55,8 @@ function inlayHints(state: LensState, document: vscode.TextDocument): vscode.Inl
 function inlayHint(state: LensState, document: vscode.TextDocument, hint: Hint): vscode.InlayHint {
     const line = Math.min(hint.position.line, document.lineCount - 1)
     const column = Math.min(hint.position.column, document.lineAt(line).text.length)
-    const inlay = new vscode.InlayHint(new vscode.Position(line, column), hint.label)
-    inlay.paddingLeft = true
+    // The gap sits inside the label, since VS Code paints `paddingLeft` with the hover highlight of the text before it.
+    const inlay = new vscode.InlayHint(new vscode.Position(line, column), `\u00a0${hint.label}`)
     inlay.tooltip = describe(state, hint.release, hint.path, document.uri.fsPath)
     return inlay
 }
