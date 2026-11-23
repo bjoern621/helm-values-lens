@@ -1,5 +1,5 @@
-import { isMap, isScalar, type Node, type Pair, parseDocument, type YAMLMap } from "yaml"
-import { isPlainMap, type Layer, sameValue, settingOf } from "./coalesce"
+import { isMap, isScalar, type Node, type Pair, parseDocument, stringify, type YAMLMap } from "yaml"
+import { coalesce, isPlainMap, type Layer, sameValue, settingOf, valueAt } from "./coalesce"
 import { type SettingSite, settingSites, siteEnd } from "./hints"
 import { chartDefault, isUnknownKey, knownKeys, type Release } from "./release"
 import { type Offset, pathKey, type Position, splitPathKey, type ValuePath } from "./yamlPaths"
@@ -37,15 +37,125 @@ export function removableGroup(group: KeyGroup): boolean {
     return group.sites.every((site) => removableAsDefault(site.release, site.layerIndex, site.path))
 }
 
+/** The user settings of one key, split by whether the chart of their release reads the key. */
+export interface KeyUse {
+    group: KeyGroup
+    readers: SettingSite[]
+    ignorers: SettingSite[]
+}
+
 /**
- * The user settings of a key that the chart of no release reading it defaults or reads in a template.
- * A file such as a shared `globals.yaml` feeds the releases of several charts.
- * A key that one of those charts reads stays known to all of them.
- * A rename or a removal would break the release whose chart reads it.
+ * The keys of a file that the chart of at least one release reading the file ignores.
+ * A file such as a shared `globals.yaml` feeds the releases of several charts, which read different parts of it.
+ * A map comes back once for the keys below it that the same releases read and ignore.
  */
-export function unknownSites(group: KeyGroup): SettingSite[] {
-    if (group.sites.some((site) => !isUnknownKey(site.release, site.path))) return []
-    return group.sites.filter((site) => site.layerIndex >= site.release.firstUserLayer)
+export function ignoredKeys(groups: readonly KeyGroup[]): KeyUse[] {
+    const ordered = [...groups].sort(
+        (a, b) => a.key.line - b.key.line || a.key.column - b.key.column
+    )
+    const ignored: KeyUse[] = []
+    ordered.forEach((group, index) => {
+        const use = keyUse(group)
+        if (use.ignorers.length === 0) return
+        const parentKey = pathKey(group.path.slice(0, -1))
+        const parent = ordered
+            .slice(0, index)
+            .filter(
+                (other: KeyGroup) =>
+                    other.path.length === group.path.length - 1 && pathKey(other.path) === parentKey
+            )
+            .at(-1)
+        if (parent !== undefined && sameUse(keyUse(parent), use)) return
+        ignored.push(use)
+    })
+    return ignored
+}
+
+function keyUse(group: KeyGroup): KeyUse {
+    const user = group.sites.filter((site) => site.layerIndex >= site.release.firstUserLayer)
+    return {
+        group,
+        readers: user.filter((site) => !isUnknownKey(site.release, site.path)),
+        ignorers: user.filter((site) => isUnknownKey(site.release, site.path))
+    }
+}
+
+function sameUse(a: KeyUse, b: KeyUse): boolean {
+    const ids = (sites: SettingSite[]) =>
+        [...new Set(sites.map((site) => site.release.spec.id))].sort().join("\0")
+    return ids(a.readers) === ids(b.readers) && ids(a.ignorers) === ids(b.ignorers)
+}
+
+/**
+ * The values files that can take a key from its file, for a key that the charts of some releases read and others ignore.
+ * Every release reading such a file reads the key. The move takes the key away from the releases that ignore it.
+ * The final values of every release stay the same.
+ */
+export function moveTargets(use: KeyUse, releases: readonly Release[]): string[] {
+    const { readers, ignorers } = use
+    if (readers.length === 0 || ignorers.length === 0) return []
+    const readerIds = new Set(readers.map((site) => site.release.spec.id))
+    if (readerIds.size !== readers.length) return []
+    const source = groupLayer(use.group).fsPath
+    const filesOf = (release: Release) =>
+        new Set(
+            release.trace.layers.flatMap((layer) =>
+                layer.kind === "file" && layer.fsPath !== undefined ? [layer.fsPath] : []
+            )
+        )
+    let shared = filesOf(readers[0]!.release)
+    for (const { release } of readers.slice(1)) {
+        const files = filesOf(release)
+        shared = new Set([...shared].filter((file) => files.has(file)))
+    }
+    shared.delete(source!)
+    return [...shared]
+        .filter((file) =>
+            releases.every(
+                (release) => !filesOf(release).has(file) || readerIds.has(release.spec.id)
+            )
+        )
+        .filter((file) => readers.every((site) => movesUnchanged(site, file)))
+        .sort()
+}
+
+/** Whether the final values of the release stay the same once its setting at `site` moves to the file at `target`. */
+function movesUnchanged(site: SettingSite, target: string): boolean {
+    const { release, layerIndex, path } = site
+    const layers = release.trace.layers
+    const targets = layers.flatMap((layer, index) =>
+        layer.kind === "file" && layer.fsPath === target ? [index] : []
+    )
+    if (targets.length !== 1 || valueAt(layers[targets[0]!]!.data, path) !== undefined) return false
+    const value = valueAt(layers[layerIndex]!.data, path)
+    const moved = layers.map((layer, index) => {
+        if (index === layerIndex) return { ...layer, data: withoutPath(layer.data, path) }
+        if (index === targets[0]) return { ...layer, data: withPath(layer.data, path, value) }
+        return layer
+    })
+    return sameValue(coalesce(moved).final, release.trace.final)
+}
+
+/** A copy of the values without the key at `path`, dropping each map that the removal leaves empty, as `removeKeysEdits` does. */
+function withoutPath(data: unknown, path: ValuePath): unknown {
+    if (!isPlainMap(data) || path.length === 0) return data
+    const [head, ...rest] = path
+    if (!(head! in data)) return data
+    const copy = { ...data }
+    if (rest.length === 0) delete copy[head!]
+    else {
+        const child = withoutPath(copy[head!], rest)
+        if (isPlainMap(child) && Object.keys(child).length === 0) delete copy[head!]
+        else copy[head!] = child
+    }
+    return copy
+}
+
+function withPath(data: unknown, path: ValuePath, value: unknown): unknown {
+    if (path.length === 0) return value
+    const map = isPlainMap(data) ? data : {}
+    const [head, ...rest] = path
+    return { ...map, [head!]: withPath(map[head!], rest, value) }
 }
 
 /** The layer that holds the key. Every site of a group sits in the same text. */
@@ -282,4 +392,54 @@ export function renameKeyEdit(text: string, path: ValuePath, name: string): Text
         end: pair.key.range[1],
         text: plain ? name : JSON.stringify(name)
     }
+}
+
+/**
+ * The edit that adds `value` at `path` to a values text, below the deepest map of the path that the text holds.
+ * The new lines take the indentation of the map's keys.
+ * Undefined where the text sets the path or puts something other than a block map at one of its parents.
+ */
+export function insertKeyEdit(text: string, path: ValuePath, value: unknown): TextEdit | undefined {
+    const document = parseDocument(text)
+    let map: unknown = document.contents
+    if (map !== null && !isMap(map)) return undefined
+    let depth = 0
+    while (isMap(map) && depth < path.length) {
+        const pair = map.items.find(
+            (item) => isScalar(item.key) && String(item.key.value) === path[depth]
+        )
+        if (pair === undefined) break
+        if (!isMap(pair.value)) return undefined
+        map = pair.value
+        depth++
+    }
+    if (depth === path.length) return undefined
+    const nested = path.slice(depth).reduceRight<unknown>((inner, key) => ({ [key]: inner }), value)
+    const last = isMap(map) ? map.items.at(-1) : undefined
+    if (isMap(map) && map.flow) return undefined
+    let at = text.length
+    let indent = 0
+    if (last !== undefined) {
+        const span = pairLines(text, last)
+        if (span === undefined || !isScalar(last.key) || !last.key.range) return undefined
+        at = span.end
+        indent = last.key.range[0] - (text.lastIndexOf("\n", last.key.range[0] - 1) + 1)
+    }
+    const unit = depth > 0 ? Math.max(1, Math.round(indent / depth)) : indentUnit(text)
+    const lines = stringify(nested, { indent: unit })
+        .split("\n")
+        .filter((line) => line !== "")
+        .map((line) => " ".repeat(indent) + line)
+    const newline = at > 0 && text[at - 1] !== "\n" ? "\n" : ""
+    return { start: at, end: at, text: `${newline}${lines.join("\n")}\n` }
+}
+
+/** The smallest indentation of a line in the text, the step that its nested maps take. */
+function indentUnit(text: string): number {
+    const indents = text
+        .split("\n")
+        .filter((line) => line.trim() !== "" && !line.trim().startsWith("#"))
+        .map((line) => line.length - line.trimStart().length)
+        .filter((width) => width > 0)
+    return indents.length === 0 ? 2 : Math.min(...indents)
 }

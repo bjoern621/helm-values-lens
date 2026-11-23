@@ -2,15 +2,18 @@ import { describe, expect, it } from "vitest"
 import { coalesce, type Layer } from "../src/coalesce"
 import {
     documentEdits,
+    ignoredKeys,
+    insertKeyEdit,
     keyGroups,
+    moveTargets,
     removableAsDefault,
     removeKeysEdits,
     renameKeyEdit,
     similarKeys,
     type TextEdit,
-    unknownSites,
     valuesRegion
 } from "../src/quickFixes"
+import type { SettingSite } from "../src/hints"
 import type { Release } from "../src/release"
 import { parseValues, pathKey, splitPathKey } from "../src/yamlPaths"
 
@@ -19,8 +22,10 @@ const layer = (label: string, text: string, kind: Layer["kind"] = "file"): Layer
     return { kind, label, fsPath: `/${label}`, offset: undefined, data, sites }
 }
 
+let releases = 0
 const releaseOf = (layers: Layer[], reads: string[][] = []): Release =>
     ({
+        spec: { id: String(++releases) },
         chart: { schemas: [] },
         trace: coalesce(layers),
         defaults: coalesce(layers.slice(0, 1)).final,
@@ -98,19 +103,24 @@ describe("an unknown key", () => {
         expect(similarKeys(release, ["image", "registry"])).toEqual([])
     })
 
-    it("stays known in a file shared with a release whose chart reads it", () => {
+    it("marks the outermost key that the chart of some release ignores, in a file shared with other charts", () => {
         const globals = layer("globals.yaml", "global:\n  tracing: true\n  colour: blue\n")
         const web = releaseOf([layer("values.yaml", DEFAULTS, "chart"), globals])
         const api = releaseOf(
             [layer("values.yaml", DEFAULTS, "chart"), globals],
             [["global", "tracing"]]
         )
-        const unknown = keyGroups("/globals.yaml", [web, api]).flatMap(unknownSites)
+        const names = (sites: SettingSite[]) =>
+            sites.map(({ release }) => (release === web ? "web" : "api"))
         expect(
-            unknown.map(({ release, path }) => [release === web ? "web" : "api", path.join(".")])
+            ignoredKeys(keyGroups("/globals.yaml", [web, api])).map((use) => [
+                use.group.path.join("."),
+                names(use.readers),
+                names(use.ignorers)
+            ])
         ).toEqual([
-            ["web", "global.colour"],
-            ["api", "global.colour"]
+            ["global", ["api"], ["web"]],
+            ["global.colour", [], ["web", "api"]]
         ])
     })
 
@@ -119,6 +129,67 @@ describe("an unknown key", () => {
         expect(apply(text, [renameKeyEdit(text, ["image", "tga"], "tag")!])).toBe(
             "image:\n  tag: v2 # pinned\n"
         )
+    })
+})
+
+describe("a key that the chart of some release ignores", () => {
+    const chart = () => layer("values.yaml", DEFAULTS, "chart")
+    const globals = layer("globals.yaml", "global:\n  tracing: true\n")
+    const reads = [["global", "tracing"]]
+    const partlyRead = (releases: Release[]) =>
+        ignoredKeys(keyGroups("/globals.yaml", releases)).find((use) => use.readers.length > 0)!
+
+    it("moves to a values file that only the releases reading it take", () => {
+        const web = releaseOf([chart(), globals, layer("web.yaml", "replicas: 2\n")])
+        const api = releaseOf([chart(), globals, layer("api.yaml", "replicas: 3\n")], reads)
+        const both = layer("both.yaml", "replicas: 4\n")
+        web.trace = coalesce([...web.trace.layers, both])
+        api.trace = coalesce([...api.trace.layers, both])
+        expect(moveTargets(partlyRead([web, api]), [web, api])).toEqual(["/api.yaml"])
+    })
+
+    it("stays where a move would change the final value", () => {
+        const web = releaseOf([chart(), globals])
+        const api = releaseOf(
+            [
+                chart(),
+                globals,
+                layer("staging.yaml", "global:\n  tracing: false\n"),
+                layer("api.yaml", "replicas: 3\n")
+            ],
+            reads
+        )
+        expect(moveTargets(partlyRead([web, api]), [web, api])).toEqual([])
+    })
+
+    it("gets inserted below the deepest map that the target file holds", () => {
+        const text = "global:\n  domain: example.com\nreplicas: 2\n"
+        expect(apply(text, [insertKeyEdit(text, ["global", "tracing", "enabled"], true)!])).toBe(
+            "global:\n  domain: example.com\n  tracing:\n    enabled: true\nreplicas: 2\n"
+        )
+    })
+
+    it("takes the indentation of the target file", () => {
+        const text = "image:\n    tag: v1"
+        expect(apply(text, [insertKeyEdit(text, ["image", "pullPolicy"], "Always")!])).toBe(
+            "image:\n    tag: v1\n    pullPolicy: Always\n"
+        )
+        expect(apply(text, [insertKeyEdit(text, ["service", "port"], 80)!])).toBe(
+            "image:\n    tag: v1\nservice:\n    port: 80\n"
+        )
+    })
+
+    it("fills an empty target file", () => {
+        expect(insertKeyEdit("", ["global", "tracing"], true)?.text).toBe(
+            "global:\n  tracing: true\n"
+        )
+    })
+
+    it("leaves a target file alone that sets the key or a scalar above it", () => {
+        expect(
+            insertKeyEdit("global:\n  tracing: false\n", ["global", "tracing"], true)
+        ).toBeUndefined()
+        expect(insertKeyEdit("global: off\n", ["global", "tracing"], true)).toBeUndefined()
     })
 })
 

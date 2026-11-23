@@ -1,7 +1,7 @@
 import type { Layer, Setting } from "./coalesce"
 import { sameValue, valueAt } from "./coalesce"
 import { fileLink, layerName, preview, releaseTitle, siteLink } from "./hints"
-import type { Release } from "./release"
+import { isUnknownKey, type Release } from "./release"
 import { type SchemaField, schemaField } from "./schema"
 import { type Rendered, resourcesHolding } from "./render"
 import { countOf, listed } from "./text"
@@ -28,6 +28,10 @@ export function pathMarkdown(
     details: PathDetails
 ): string {
     const sections = [chainMarkdown(release, path, fromFile, details.allLayers)]
+    if (isUnknownKey(release, path))
+        sections.push(
+            `$(circle-slash) The chart ${release.chart.name} does not read \`${dottedPath(path)}\`.`
+        )
     const field = schemaField(release.chart.schemas, path)
     if (field !== undefined) sections.push(...schemaMarkdown(field))
     if (details.rendered !== undefined) {

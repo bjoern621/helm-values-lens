@@ -1,10 +1,25 @@
 import * as vscode from "vscode"
-import { releaseTitle, siteEnd, winningUserSite } from "../hints"
-import { groupLayer, type KeyGroup, keyGroups, removableGroup, unknownSites } from "../quickFixes"
-import { listed } from "../text"
+import { releaseTitle, type SettingSite, siteEnd, winningUserSite } from "../hints"
+import {
+    groupLayer,
+    ignoredKeys,
+    type KeyGroup,
+    keyGroups,
+    type KeyUse,
+    removableGroup
+} from "../quickFixes"
+import { countOf, listed } from "../text"
 import { dottedPath, type Position } from "../yamlPaths"
 import { DIAGNOSTIC_SOURCE, RELEASES_NAMED } from "./config"
 import type { LensState } from "./state"
+
+/** Tells the quick fixes which marker they resolve. */
+export const MarkerCode = {
+    ChartDefault: "chart-default",
+    PartlyRead: "partly-read",
+    Unread: "unread"
+} as const
+type MarkerCode = (typeof MarkerCode)[keyof typeof MarkerCode]
 
 interface Span {
     start: Position
@@ -15,7 +30,10 @@ interface Span {
  * Marks the problems of the releases in the files that hold them.
  * A release that did not load or render gets a warning or an error at the line that names it.
  * A value that a `values.schema.json` rejects gets an error at the key that sets it, as `helm template` would fail on it.
- * A key unknown to its chart gets a note. A key equal to the chart default gets a hint, which offers its quick fix and counts as no problem.
+ * A key that no chart reading its file reads gets a warning, since it changes nothing.
+ * It gets a note where a release that takes the file did not load, since its chart could read the key unseen.
+ * A key that the charts of some releases read and others ignore gets a hint, which counts as no problem.
+ * A key equal to the chart default gets a hint, which offers its quick fix.
  */
 export class Diagnostics implements vscode.Disposable {
     private readonly collection = vscode.languages.createDiagnosticCollection(DIAGNOSTIC_SOURCE)
@@ -36,7 +54,8 @@ export class Diagnostics implements vscode.Disposable {
             fsPath: string,
             span: Span,
             message: string,
-            severity: vscode.DiagnosticSeverity
+            severity: vscode.DiagnosticSeverity,
+            code?: MarkerCode
         ) => {
             const list = byFile.get(fsPath) ?? []
             const line = span.start.line
@@ -50,6 +69,7 @@ export class Diagnostics implements vscode.Disposable {
             )
             const diagnostic = new vscode.Diagnostic(range, message, severity)
             diagnostic.source = DIAGNOSTIC_SOURCE
+            diagnostic.code = code
             list.push(diagnostic)
             byFile.set(fsPath, list)
         }
@@ -89,17 +109,28 @@ export class Diagnostics implements vscode.Disposable {
                 Warning
             )
         for (const fsPath of this.valuesFiles()) {
-            for (const group of keyGroups(fsPath, this.state.releases)) {
-                const span = { start: group.key, end: group.end }
-                for (const { release, path } of unknownSites(group))
+            const groups = keyGroups(fsPath, this.state.releases)
+            const unloaded = this.state.failures.filter(({ spec }) =>
+                spec.layers.some((layer) => layer.fsPath === fsPath)
+            ).length
+            for (const use of ignoredKeys(groups)) {
+                const span = { start: use.group.key, end: use.group.end }
+                if (use.readers.length > 0)
+                    add(fsPath, span, partlyReadMessage(use), Hint, MarkerCode.PartlyRead)
+                else if (unloaded > 0)
                     add(
                         fsPath,
                         span,
-                        `${releaseTitle(release.spec)}: the chart ${release.chart.name} does not read ${dottedPath(path)}`,
-                        Information
+                        `${unreadMessage(use)} ${countOf(unloaded, "release")} that take this file did not load.`,
+                        Information,
+                        MarkerCode.Unread
                     )
+                else add(fsPath, span, unreadMessage(use), Warning, MarkerCode.Unread)
+            }
+            for (const group of groups) {
+                const span = { start: group.key, end: group.end }
                 if (groupLayer(group).kind !== "parameters" && removableGroup(group))
-                    add(fsPath, span, defaultMessage(group), Hint)
+                    add(fsPath, span, defaultMessage(group), Hint, MarkerCode.ChartDefault)
             }
         }
         this.collection.clear()
@@ -119,6 +150,22 @@ export class Diagnostics implements vscode.Disposable {
 function defaultMessage(group: KeyGroup): string {
     const titles = [...new Set(group.sites.map((site) => releaseTitle(site.release.spec)))]
     return `${dottedPath(group.path)} equals the chart default. Removing it leaves the values of ${listed(titles, RELEASES_NAMED)} unchanged.`
+}
+
+/** Names the releases whose charts read the key and the ones whose charts ignore it. */
+function partlyReadMessage({ group, readers, ignorers }: KeyUse): string {
+    return `${dottedPath(group.path)}: read by ${titles(readers)}, ignored by ${titles(ignorers)}.`
+}
+
+function unreadMessage({ group, ignorers }: KeyUse): string {
+    return `${dottedPath(group.path)}: read by no chart, ignored by ${titles(ignorers)}.`
+}
+
+function titles(sites: readonly SettingSite[]): string {
+    return listed(
+        [...new Set(sites.map((site) => releaseTitle(site.release.spec)))],
+        RELEASES_NAMED
+    )
 }
 
 function wholeLine(line: number): Span {

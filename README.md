@@ -16,9 +16,11 @@ A repository holding one of those needs no settings.
 - Next to a value in a values file: the layer that overrides or deletes it, with the final value (`overridden by values-staging.yaml: 1.27-rc`).
 - Next to a value that a later layer sets to the same value: `also set by helm.valuesObject`.
 - Next to a value equal to the chart default: `= chart default`.
-- An information marker on a key that the chart does not read, such as `the chart web does not read imgae.tag`.
+- A warning on a key that no chart reads, such as `imgae.tag: read by no chart, ignored by web.`
   Such a key changes nothing in the release and most likely carries a typo or an outdated name.
-  A file that feeds the releases of several charts, such as a shared `globals.yaml`, gets the marker on a key that none of those charts reads.
+  Where a release that takes the file did not load, the warning drops to a note, since the extension cannot tell whether its chart reads the key.
+- Three faint dots under a key that the charts of some releases read and the charts of others ignore, such as a key of a shared `globals.yaml`: `global.tracing: read by api, ignored by web.`
+  The hover of each release that ignores it names its chart.
 - Next to each `.Values` read in a chart template: the final value of the release.
 - On hover over a key or a `.Values` read: every layer of each release that reads the file, lowest first, each linked to its line.
   The hover covers the one path under the cursor, in a values file, in the values block of an Application and in a template alike.
@@ -29,7 +31,9 @@ A repository holding one of those needs no settings.
 - A quick fix on a key equal to the chart default, which removes it or every such key of its values file or values block.
   A chart upgrade that changes the default then reaches the release.
   The key itself stays valid: three faint dots under it mark the fix, with no warning.
-- A quick fix on an unknown key, which renames it to a key of the chart a typo away or removes it.
+- A quick fix on a key that no chart reads, which renames it to a key of the chart a typo away or removes it.
+- A quick fix on a key that some charts ignore, which moves it to a values file that only the releases reading it take.
+  The fix shows up where such a file exists and the move leaves the final values of every release unchanged.
 - An error on a key whose final value the `values.schema.json` of the chart rejects, such as `replicas must be >= 1`, where `helm template` would fail.
   The schema of a dependency checks the values under its key.
   A value that no file sets, such as a missing required key, gets its error on the map around it or on the release.
