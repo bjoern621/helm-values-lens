@@ -84,8 +84,9 @@ async function pickRelease(
 
 /** Lets the user pick the release whose values the hints show, or every release of the file. */
 async function selectRelease(state: LensState, workingFile: WorkingFile): Promise<void> {
-    const candidates = activeCandidates(state, workingFile)
-    const releases = candidates.length > 0 ? candidates : state.releases
+    const file = workingFile.fsPath
+    const choices = file === undefined ? [] : state.choices(file)
+    const releases = choices.length > 0 ? choices : state.releases
     const root = firstRoot()
     const all: ReleaseItem = {
         label: "All releases",

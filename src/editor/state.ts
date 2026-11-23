@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 import { releaseTitle, templatePrefix } from "../hints"
 import type { RenderState } from "../markdown"
-import type { Release } from "../release"
+import { outermost, type Release } from "../release"
 import { changedResources, type Rendered, type ResourceChanges } from "../render"
 import type { Discovery, Failure, WorkspaceIndex } from "../workspace"
 import { ALL_RELEASES, FOCUS_KEY } from "./config"
@@ -17,6 +17,8 @@ export interface Progress {
 export interface FileReleases {
     shown: Release[]
     others: Release[]
+    /** The entries of the release picker that the others make up. */
+    otherChoices: Release[]
 }
 
 /**
@@ -140,6 +142,14 @@ export class LensState implements vscode.Disposable {
             .sort((a, b) => releaseTitle(a.spec).localeCompare(releaseTitle(b.spec)))
     }
 
+    /**
+     * The releases of a file that the release picker lists.
+     * An Application that a chart renders shows with the release of that chart, which renders it whenever the chart reads the file too.
+     */
+    choices(fsPath: string): Release[] {
+        return outermost(this.candidates(fsPath))
+    }
+
     /** The release of `candidates` that the hints follow, or undefined once the user picked every release. */
     focused(candidates: readonly Release[]): Release | undefined {
         if (this.focus === ALL_RELEASES) return undefined
@@ -160,10 +170,15 @@ export class LensState implements vscode.Disposable {
      */
     fileReleases(fsPath: string): FileReleases {
         const candidates = this.candidates(fsPath)
-        const focus = this.focused(candidates)
-        if (focus === undefined) return { shown: candidates, others: [] }
+        const choices = outermost(candidates)
+        const focus = this.focused(choices)
+        if (focus === undefined) return { shown: candidates, others: [], otherChoices: [] }
         const shown = candidates.filter((release) => related(release.spec.id, focus.spec.id))
-        return { shown, others: candidates.filter((release) => !shown.includes(release)) }
+        return {
+            shown,
+            others: candidates.filter((release) => !shown.includes(release)),
+            otherChoices: choices.filter((release) => !shown.includes(release))
+        }
     }
 
     async setFocus(id: string): Promise<void> {

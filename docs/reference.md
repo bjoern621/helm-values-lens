@@ -66,6 +66,8 @@ One values file often feeds several releases, such as one chart deployed to stag
 The status bar names the release whose values the hints show, with the number of releases that read the file.
 To pick another release or all of them, click it or run `Helm Values Lens: Select Release for Hints`.
 Releases of the same name carry the folder that tells them apart, such as `platform (staging) > web` and `platform (production) > web`.
+An Application that a chart renders, such as `platform (staging) > web`, shares the entry of `platform (staging)` whenever both read the file.
+Picking that entry shows the values of both.
 
 To apply a quick fix, click the lightbulb next to the key or press `Ctrl+.` on its line.
 The fixes work in values files and in the `helm.values` and `helm.valuesObject` blocks of an Application.

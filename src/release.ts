@@ -265,3 +265,13 @@ export function unknownKeys(release: Release): ValuePath[] {
     }
     return flagged
 }
+
+/**
+ * Drops each release that another release of the list renders, such as an Argo CD Application that the chart of another Application holds.
+ * The release that renders it stands for it in the release picker.
+ */
+export function outermost<T extends { spec: { id: string } }>(releases: readonly T[]): T[] {
+    return releases.filter(
+        (release) => !releases.some((other) => release.spec.id.startsWith(`${other.spec.id}>`))
+    )
+}

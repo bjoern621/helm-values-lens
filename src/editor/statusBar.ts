@@ -30,7 +30,7 @@ export class StatusBar implements vscode.Disposable {
 
     private update(): void {
         const file = this.workingFile.fsPath
-        const candidates = file === undefined ? [] : this.state.candidates(file)
+        const candidates = file === undefined ? [] : this.state.choices(file)
         const progress = this.state.progress
         if (candidates.length === 0 && progress === undefined) {
             this.item.hide()

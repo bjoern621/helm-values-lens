@@ -115,7 +115,7 @@ function targetHover(
     releases: FileReleases
 ): vscode.Hover {
     const sections = targets.map((target) => markdownOf(target.release, target.path, fsPath))
-    const hidden = releases.others.length
+    const hidden = releases.otherChoices.length
     const shownOnly = targets.every((target) => releases.shown.includes(target.release))
     if (hidden > 0 && shownOnly)
         sections.push(
