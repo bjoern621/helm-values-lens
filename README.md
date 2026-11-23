@@ -19,13 +19,15 @@ A repository holding one of those needs no settings.
 - An information marker on a key that the chart neither defaults nor reads, most likely a misspelled or outdated key.
 - Next to each `.Values` read in a chart template: the final value of the release.
 - On hover over a key or a `.Values` read: every layer of each release that reads the file, lowest first, each linked to its line.
+  The hover covers the one path under the cursor, in a values file, in the values block of an Application and in a template alike.
   A mark names what became of the layer's value: final, same as final, overridden, replaced, deleted or not set.
 - In the same hover, after a render: the rendered resources whose text holds the value.
   A chart default with the same text matches as well.
-- A quick fix on a key equal to the chart default, which removes it or every such key in the file.
+- A quick fix on a key equal to the chart default, which removes it or every such key of its values file or values block.
   A chart upgrade that changes the default then reaches the release.
-  The key itself stays valid and gets no marker.
+  The key itself stays valid: three faint dots under it mark the fix, with no warning.
 - A quick fix on an unknown key, which renames it to a key of the chart a typo away or removes it.
+- On hover over the line that names a release, such as `metadata.name` of an Application: its chart and its values layers.
 - Above the release in its Application, Helmfile, HelmRelease or kustomization: the chart, the number of values layers, a link to the files of the chart and the state of the last render.
 - A problem marker on the release where its chart could not be loaded or `helm template` could not render it.
 
@@ -38,12 +40,16 @@ The extension finds the releases, loads their charts and renders each one with `
 Hints update while you type.
 Saving a file renders every release again.
 The status bar then names the resources that the save changed.
+While the extension reads or renders, the status bar counts the releases done, such as `Reading releases 12/40`.
 
 One values file often feeds several releases, such as one chart deployed to staging and production.
 The status bar names the release whose values the hints show, with the number of releases that read the file.
 To pick another release or all of them, click it or run `Helm Values Lens: Select Release for Hints`.
 
 ![The picker listing the releases that read the active file](docs/release-picker.png)
+
+To apply a quick fix, click the lightbulb next to the key or press `Ctrl+.` on its line.
+The fixes work in values files and in the `helm.values` and `helm.valuesObject` blocks of an Application.
 
 The commands, under `Helm Values Lens:` in the command palette:
 
