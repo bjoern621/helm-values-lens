@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import { releaseTitle } from "../hints"
 import { countOf } from "../text"
 import type { RenderState } from "../markdown"
 import { DOCUMENT_SELECTOR } from "./config"
@@ -22,7 +23,8 @@ function codeLenses(state: LensState, document: vscode.TextDocument): vscode.Cod
         const range = new vscode.Range(line, 0, line, 0)
         const userLayers = release.trace.layers.length - release.firstUserLayer
         const id = release.spec.id
-        const name = (perLine.get(release.spec.appLine) ?? 0) > 1 ? `${release.spec.name}: ` : ""
+        const name =
+            (perLine.get(release.spec.appLine) ?? 0) > 1 ? `${releaseTitle(release.spec)}: ` : ""
         return [
             new vscode.CodeLens(range, {
                 title: `${name}Final values: ${countOf(userLayers, "layer")} over ${release.chart.name}`,

@@ -52,6 +52,7 @@ While the extension reads or renders, the status bar counts the releases done, s
 One values file often feeds several releases, such as one chart deployed to staging and production.
 The status bar names the release whose values the hints show, with the number of releases that read the file.
 To pick another release or all of them, click it or run `Helm Values Lens: Select Release for Hints`.
+Releases of the same name carry the folder that tells them apart, such as `platform (staging) > web` and `platform (production) > web`.
 
 ![The picker listing the releases that read the active file](docs/release-picker.png)
 

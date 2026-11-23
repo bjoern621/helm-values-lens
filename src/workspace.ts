@@ -11,6 +11,7 @@ import {
 } from "./argo"
 import { chartDir, loadChart } from "./chart"
 import type { LoadedChart } from "./chart"
+import { placeReleases } from "./hints"
 import { buildRelease, type ReadText, readFromDisk, type Release } from "./release"
 import { firstLine } from "./text"
 import { type Rendered, renderRelease } from "./render"
@@ -516,6 +517,10 @@ export async function discover(
     ]
     const loadedDirs = discovery.releases.map((release) => release.chart.dir)
     await visitAll(chartReleases(index, used, loadedDirs), 1)
+    placeReleases([
+        ...discovery.releases.map((release) => release.spec),
+        ...discovery.failures.map((failure) => failure.spec)
+    ])
     return discovery
 }
 
@@ -563,7 +568,7 @@ export function renderedApplications(
             specs.push({
                 ...spec,
                 id: `${parent.spec.id}>${spec.name}`,
-                parent: parent.spec.name,
+                parent: parent.spec,
                 origin: "Argo CD Application rendered by a chart",
                 appFile: templateFile,
                 appLine: twin?.appLine ?? 0,

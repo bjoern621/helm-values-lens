@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { targetsAt, valueHints } from "../src/hints"
+import { releaseTitle, targetsAt, valueHints } from "../src/hints"
 import type { Release } from "../src/release"
 import {
     checkoutsOf,
@@ -86,9 +86,17 @@ describe.skipIf(!hasHelm)("discover", () => {
         ])
     })
 
+    it("tells releases of one title apart by the folder that holds their description", () => {
+        const titles = releases.map((release) => releaseTitle(release.spec))
+        expect(titles).toContain("platform (production)")
+        expect(titles).toContain("platform (staging)")
+        expect(titles).toContain("platform (staging) > web-staging")
+        expect(titles).toContain("worker")
+    })
+
     it("hands an Application in the output the values of its cluster", () => {
         const staging = named("web-staging")
-        expect(staging.spec.parent).toBe("platform")
+        expect(staging.spec.parent?.name).toBe("platform")
         expect(staging.trace.layers.map((layer) => layer.label)).toEqual([
             "chart values.yaml",
             "values-staging.yaml",

@@ -44,8 +44,13 @@ export interface ReleaseSpec {
     name: string
     /** Names what describes the release, such as "Argo CD Application" or "Helmfile release". */
     origin: string
-    /** The name of the release whose render produced this one, for an Application that a chart renders. */
-    parent?: string
+    /** The release whose render produced this one, for an Application that a chart renders. */
+    parent?: ReleaseSpec
+    /**
+     * Tells the release apart from others of the same title, such as the folder of its cluster.
+     * `placeReleases` sets it once a title belongs to more than one release.
+     */
+    place?: string
     /** The file that describes the release. */
     appFile: string
     /** The line in `appFile` where the editor shows the summary of the release. */

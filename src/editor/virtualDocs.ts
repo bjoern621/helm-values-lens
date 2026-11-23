@@ -1,6 +1,7 @@
 import { basename, dirname } from "node:path"
 import * as vscode from "vscode"
 import { annotatedFinalValues } from "../finalValues"
+import { releaseTitle } from "../hints"
 import type { Release } from "../release"
 import { VIRTUAL_SCHEME } from "./config"
 import { rootOf } from "./folders"
@@ -57,11 +58,11 @@ export class VirtualDocs implements vscode.Disposable {
     }
 }
 
-/** The release name shows as the tab title. The query holds the id, since names repeat. */
+/** The release title shows as the tab title. The query holds the id. */
 function virtualUri(release: Release, view: View): vscode.Uri {
     return vscode.Uri.from({
         scheme: VIRTUAL_SCHEME,
-        path: `/${release.spec.name.replaceAll("/", "-")}/${view}`,
+        path: `/${releaseTitle(release.spec).replaceAll("/", "-")}/${view}`,
         query: release.spec.id
     })
 }

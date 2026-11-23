@@ -1,5 +1,6 @@
 import { relative } from "node:path"
 import { Document, isPair, isScalar, isSeq, visit } from "yaml"
+import { releaseTitle } from "./hints"
 import type { Release } from "./release"
 import { pathKey } from "./yamlPaths"
 
@@ -23,7 +24,7 @@ export function annotatedFinalValues(release: Release, root: string): string {
         }
     })
     const header = [
-        `# Final values of ${release.spec.name}, lowest layer first:`,
+        `# Final values of ${releaseTitle(release.spec)}, lowest layer first:`,
         ...release.trace.layers.map((layer, index) => `#   ${index}. ${layer.label}`),
         ""
     ].join("\n")

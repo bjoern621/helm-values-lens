@@ -1,4 +1,5 @@
-import { relative } from "node:path"
+import { basename, relative, sep } from "node:path"
+import type { ReleaseSpec } from "./argo"
 import { isPlainMap, type Layer, sameValue, settingOf, valueAt } from "./coalesce"
 import { chartDefault, isUnknownKey, type Release, VALUES_READ } from "./release"
 import {
@@ -270,9 +271,66 @@ export function layerName(release: Release, layerIndex: number, fromFile: string
     return path.startsWith("../../") ? layer.label : path
 }
 
-/** Names a release after the release whose chart renders it, if any. */
-export function releaseTitle(spec: { name: string; parent?: string }): string {
-    return spec.parent === undefined ? spec.name : `${spec.parent} > ${spec.name}`
+/** Names a release after the releases whose charts render it, each with the place that tells it apart from releases of the same name. */
+export function releaseTitle(spec: { name: string; parent?: ReleaseSpec; place?: string }): string {
+    const own = spec.place === undefined ? spec.name : `${spec.name} (${spec.place})`
+    return spec.parent === undefined ? own : `${releaseTitle(spec.parent)} > ${own}`
+}
+
+/** How many renders lie between a release and the release at the top of its chain. */
+function depthOf(spec: ReleaseSpec): number {
+    return spec.parent === undefined ? 0 : depthOf(spec.parent) + 1
+}
+
+/**
+ * Gives each release whose title another release shares a place: the part of the path of its description that the others lack.
+ * The `platform` releases of `clusters/staging/platform.yaml` and `clusters/production/platform.yaml` get the places `staging` and `production`.
+ * The releases at the top of a chain get their places first, since the title of a rendered Application holds the title of its parent.
+ */
+export function placeReleases(specs: readonly ReleaseSpec[]): void {
+    for (const spec of specs) spec.place = undefined
+    const byDepth = [...specs].sort((a, b) => depthOf(a) - depthOf(b))
+    let index = 0
+    while (index < byDepth.length) {
+        const depth = depthOf(byDepth[index]!)
+        const groups = new Map<string, ReleaseSpec[]>()
+        for (; index < byDepth.length && depthOf(byDepth[index]!) === depth; index++) {
+            const spec = byDepth[index]!
+            const title = releaseTitle(spec)
+            groups.set(title, [...(groups.get(title) ?? []), spec])
+        }
+        for (const group of groups.values()) {
+            if (group.length < 2) continue
+            const places = distinctParts(
+                group.map((spec) => ({ file: spec.appFile, line: spec.appLine }))
+            )
+            group.forEach((spec, at) => {
+                spec.place = places[at]
+            })
+        }
+    }
+}
+
+/**
+ * Cuts the leading folders and the trailing path parts that every path shares.
+ * Two releases in one file get the file name and line.
+ */
+function distinctParts(starts: readonly { file: string; line: number }[]): string[] {
+    const segments = starts.map((start) => start.file.split(sep))
+    const first = segments[0]!
+    const shortest = Math.min(...segments.map((parts) => parts.length))
+    const sharedAt = (index: (parts: string[]) => number) =>
+        segments.every((parts) => parts[index(parts)] === first[index(first)])
+    let head = 0
+    while (head < shortest && sharedAt(() => head)) head++
+    let tail = 0
+    while (tail < shortest - head && sharedAt((parts) => parts.length - 1 - tail)) tail++
+    const parts = segments.map((path) => path.slice(head, path.length - tail).join("/"))
+    return parts.map((part, index) => {
+        const start = starts[index]!
+        if (part === "") return `${basename(start.file)}:${start.line + 1}`
+        return parts.indexOf(part) === parts.lastIndexOf(part) ? part : `${part}:${start.line + 1}`
+    })
 }
 
 /** Shows a value in one short line: a string bare, a map or a list by its size. */
