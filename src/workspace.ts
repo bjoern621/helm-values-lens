@@ -14,7 +14,8 @@ import type { LoadedChart } from "./chart"
 import { placeReleases } from "./hints"
 import { buildRelease, type ReadText, readFromDisk, type Release } from "./release"
 import { firstLine } from "./text"
-import { type Rendered, renderRelease } from "./render"
+import type { Rendered } from "./render"
+import { cachedRender, type RenderCache } from "./renderCache"
 import { readApplicationSets } from "./sources/applicationSet"
 import { readFluxHelmReleases } from "./sources/flux"
 import { readHelmfile } from "./sources/helmfile"
@@ -450,6 +451,8 @@ export async function discover(
         charts?: Map<string, LoadedChart>
         /** Renders of an earlier discovery, taken in place of rendering the same release again. */
         renders?: ReadonlyMap<string, Rendered>
+        /** Renders kept on disk, read where a release renders Applications and its inputs stayed the same. */
+        cache?: RenderCache
         /** Called after each release loads. The total grows as renders turn up Applications. */
         onProgress?: (done: number, total: number) => void
     } = {}
@@ -484,7 +487,7 @@ export async function discover(
         if (rendersApps.get(dir) !== true) return []
         let rendered = options.renders?.get(spec.id)
         try {
-            rendered ??= await renderRelease(release, helmPath)
+            rendered ??= await cachedRender(release, helmPath, options.cache)
         } catch (error) {
             discovery.renderErrors.set(spec.id, (error as Error).message)
             return []

@@ -46,9 +46,11 @@ A repository holding one of those needs no settings.
 
 Open the folder that holds your deployment files.
 The extension finds the releases, loads their charts and renders each one with `helm template` in the background.
+Each render stays on disk in the extension's storage for the workspace.
+After a restart or a save, helm renders the releases whose values files or chart changed.
+Every other release takes its render from disk.
 Hints update while you type.
-Saving a file renders every release again.
-The status bar then names the resources that the save changed.
+The status bar names the resources that a save changed.
 While the extension reads or renders, the status bar counts the releases done, such as `Reading releases 12/40`.
 
 One values file often feeds several releases, such as one chart deployed to staging and production.

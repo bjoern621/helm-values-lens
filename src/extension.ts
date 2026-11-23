@@ -1,4 +1,4 @@
-import { basename } from "node:path"
+import { basename, join } from "node:path"
 import * as vscode from "vscode"
 import { registerCodeActions } from "./editor/codeActions"
 import { registerCodeLens } from "./editor/codeLens"
@@ -11,6 +11,7 @@ import { LensState } from "./editor/state"
 import { StatusBar } from "./editor/statusBar"
 import { registerValueViews } from "./editor/valueViews"
 import { VirtualDocs } from "./editor/virtualDocs"
+import { RenderCache } from "./renderCache"
 import { RELEASE_FILE } from "./workspace"
 
 /** The files whose creation or deletion can add or remove a release. */
@@ -19,7 +20,14 @@ const WATCHED_FILES = "**/{*.yaml,*.yml,*.gotmpl,*.tpl,Kustomization}"
 export function activate(context: vscode.ExtensionContext): void {
     const output = vscode.window.createOutputChannel(DIAGNOSTIC_SOURCE)
     const state = new LensState(context.workspaceState)
-    const indexer = new Indexer(state, output, context.globalStorageUri.fsPath)
+    const renderCache =
+        context.storageUri === undefined
+            ? undefined
+            : new RenderCache(
+                  join(context.storageUri.fsPath, "renders"),
+                  String(context.extension.packageJSON.version)
+              )
+    const indexer = new Indexer(state, output, context.globalStorageUri.fsPath, renderCache)
     const docs = new VirtualDocs(state)
     const watcher = vscode.workspace.createFileSystemWatcher(WATCHED_FILES)
     context.subscriptions.push(

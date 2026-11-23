@@ -4,6 +4,7 @@ import type { LoadedChart } from "../chart"
 import { releaseTitle } from "../hints"
 import type { Release } from "../release"
 import { type Rendered, renderRelease } from "../render"
+import type { RenderCache } from "../renderCache"
 import { countOf, firstLine } from "../text"
 import { discover, inBatches } from "../workspace"
 import {
@@ -35,7 +36,8 @@ export class Indexer implements vscode.Disposable {
     constructor(
         private readonly state: LensState,
         private readonly output: vscode.OutputChannel,
-        private readonly cacheDir: string
+        private readonly cacheDir: string,
+        private readonly renderCache: RenderCache | undefined
     ) {}
 
     dispose(): void {
@@ -63,12 +65,17 @@ export class Indexer implements vscode.Disposable {
         })
     }
 
-    /** Renders a release with `helm template`. With `announce`, a first render and a failure show a message. */
+    /**
+     * Renders a release with `helm template` and keeps the render on disk.
+     * With `announce`, a first render and a failure show a message.
+     */
     async render(release: Release, announce: boolean): Promise<void> {
         const id = release.spec.id
         const title = releaseTitle(release.spec)
+        const { helmPath } = readSettings()
         try {
-            const rendered = await renderRelease(release, readSettings().helmPath)
+            const rendered = await renderRelease(release, helmPath)
+            this.renderCache?.put(release, helmPath, rendered)
             const first = this.state.rendered(id) === undefined
             this.store(release, rendered)
             if (first && announce)
@@ -99,6 +106,7 @@ export class Indexer implements vscode.Disposable {
                 repositories: settings.repositories,
                 // Rendering each chart that renders Applications on every keystroke would keep helm busy, so typing reuses the renders of the last save.
                 renders: render ? undefined : this.renderedSoFar(),
+                cache: this.renderCache,
                 onProgress: (done, total) => {
                     if (current()) this.state.setProgress("reading", { done, total })
                 }
@@ -137,11 +145,22 @@ export class Indexer implements vscode.Disposable {
         this.renderTimer = setTimeout(() => void this.renderAll(), RENDER_DELAY_MS)
     }
 
-    /** Renders each release that the last discovery left unrendered, counting the renders in the status bar. */
+    /**
+     * Renders each release that the last discovery left unrendered, counting the renders in the status bar.
+     * A release whose inputs match a render on disk takes that render without calling helm.
+     */
     private async renderAll(): Promise<void> {
         const skipped = this.freshRenders
         this.freshRenders = new Set()
-        const releases = this.state.releases.filter((release) => !skipped.has(release.spec.id))
+        const { helmPath } = readSettings()
+        const releases: Release[] = []
+        for (const release of this.state.releases) {
+            if (skipped.has(release.spec.id)) continue
+            const kept = this.renderCache?.get(release, helmPath)
+            if (kept === undefined) releases.push(release)
+            else this.store(release, kept)
+        }
+        this.state.notify()
         const progress = { done: 0, total: releases.length }
         this.state.setProgress("rendering", progress)
         await inBatches(releases, async (release) => {
@@ -150,6 +169,7 @@ export class Indexer implements vscode.Disposable {
             this.state.setProgress("rendering", progress)
         })
         this.state.setProgress("rendering", undefined)
+        this.renderCache?.prune(this.state.releases.map((release) => release.spec.id))
     }
 
     /** Keeps a render. The status bar names the resources that changed since the render before. */

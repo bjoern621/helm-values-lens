@@ -63,7 +63,7 @@ export async function renderRelease(
     }
 }
 
-function resourcesOf(manifests: string): Map<string, string> {
+export function resourcesOf(manifests: string): Map<string, string> {
     const resources = new Map<string, string>()
     for (const body of manifests.split(/^---\s*$/m)) {
         if (body.trim() === "") continue
