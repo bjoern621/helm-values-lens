@@ -148,6 +148,20 @@ describe("a key that the chart of some release ignores", () => {
         expect(moveTargets(partlyRead([web, api]), [web, api])).toEqual(["/api.yaml"])
     })
 
+    it("moves into a map of the target file that holds keys of its own", () => {
+        const shared = layer("globals.yaml", "global:\n  region: eu\n  tracing: true\n")
+        const web = releaseOf([chart(), shared], [["global", "region"]])
+        const api = releaseOf(
+            [chart(), shared, layer("api.yaml", "global:\n  logLevel: debug\n")],
+            [
+                ["global", "region"],
+                ["global", "tracing"],
+                ["global", "logLevel"]
+            ]
+        )
+        expect(moveTargets(partlyRead([web, api]), [web, api])).toEqual(["/api.yaml"])
+    })
+
     it("stays where a move would change the final value", () => {
         const web = releaseOf([chart(), globals])
         const api = releaseOf(

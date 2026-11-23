@@ -147,9 +147,23 @@ export function isPlainMap(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-/** Whether two values hold the same data, as Helm would render them. */
+/**
+ * Whether two values hold the same data, as Helm would render them.
+ * Two maps match whatever the order of their keys, since `toYaml` sorts the keys of a map.
+ * Two lists match item by item, in order.
+ */
 export function sameValue(a: unknown, b: unknown): boolean {
-    return JSON.stringify(a) === JSON.stringify(b)
+    if (Array.isArray(a) || Array.isArray(b)) {
+        if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+        return a.every((item, index) => sameValue(item, b[index]))
+    }
+    if (isPlainMap(a) || isPlainMap(b)) {
+        if (!isPlainMap(a) || !isPlainMap(b)) return false
+        const keys = Object.keys(a)
+        if (keys.length !== Object.keys(b).length) return false
+        return keys.every((key) => Object.hasOwn(b, key) && sameValue(a[key], b[key]))
+    }
+    return a === b
 }
 
 /** What the layer at `layerIndex` sets at `path`, or undefined where it leaves the path alone. */
