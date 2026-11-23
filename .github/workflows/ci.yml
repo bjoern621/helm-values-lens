@@ -1,0 +1,26 @@
+name: CI
+
+on:
+    push:
+    pull_request:
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  cache: npm
+            # The tests compare the merged values with the output of helm, helmfile and kustomize.
+            - uses: ./.github/actions/tools
+            - run: npm ci
+            - run: npm run typecheck
+            - run: npm test
+            - run: npm run package -- --out helm-values-lens.vsix
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: helm-values-lens-vsix
+                  path: helm-values-lens.vsix
+                  if-no-files-found: error

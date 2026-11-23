@@ -4,16 +4,26 @@
     "description": "Shows next to each line of a Helm values file the value that the release ends up with and the layer that sets it. Reads the layer order from Argo CD, Helmfile, Flux and Kustomize.",
     "version": "1.9.2",
     "publisher": "bjoern621",
+    "icon": "media/icon.png",
+    "galleryBanner": {
+        "color": "#0f5fb0",
+        "theme": "dark"
+    },
     "license": "MIT",
     "repository": {
         "type": "git",
         "url": "https://github.com/bjoern621/helm-values-lens.git"
+    },
+    "homepage": "https://github.com/bjoern621/helm-values-lens#readme",
+    "bugs": {
+        "url": "https://github.com/bjoern621/helm-values-lens/issues"
     },
     "private": true,
     "engines": {
         "vscode": "^1.100.0"
     },
     "categories": [
+        "Linters",
         "Other"
     ],
     "main": "./dist/extension.js",
@@ -145,7 +155,7 @@
         "trace": "node esbuild.mjs && node dist/cli.js",
         "format": "prettier --write .",
         "vscode:prepublish": "npm run build",
-        "package": "vsce package --no-rewrite-relative-links"
+        "package": "vsce package"
     },
     "devDependencies": {
         "@types/node": "22.20.5",
@@ -159,5 +169,17 @@
     "dependencies": {
         "ajv": "8.17.1",
         "yaml": "2.9.1"
-    }
+    },
+    "keywords": [
+        "helm",
+        "values",
+        "argo cd",
+        "argocd",
+        "helmfile",
+        "flux",
+        "kustomize",
+        "kubernetes",
+        "gitops",
+        "yaml"
+    ]
 }

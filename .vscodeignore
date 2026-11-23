@@ -1,9 +1,7 @@
-src/
-test/
-node_modules/
-**/*.map
-tsconfig.json
-esbuild.mjs
-.prettierrc.yaml
-*.vsix
-dist/cli.js
+**
+!dist/extension.js
+!media/icon.png
+!package.json
+!README.md
+!LICENSE
+!CHANGELOG.md

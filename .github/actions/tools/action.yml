@@ -1,0 +1,12 @@
+name: Tools
+description: Puts helm, helmfile and kustomize on the PATH.
+
+runs:
+    using: composite
+    steps:
+        - uses: azure/setup-helm@v4
+        - shell: bash
+          run: |
+              curl -fsSL https://github.com/helmfile/helmfile/releases/download/v1.8.0/helmfile_1.8.0_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin helmfile
+              curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.8.3/kustomize_v5.8.3_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin kustomize
+              helm version --short && helmfile --version && kustomize version
