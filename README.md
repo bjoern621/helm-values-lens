@@ -2,8 +2,8 @@
 
 See next to every line of a Helm values file the value that your release ends up with.
 
-[![Marketplace](https://img.shields.io/visual-studio-marketplace/v/bjoern621.helm-values-lens?label=Marketplace&color=0f5fb0)](https://marketplace.visualstudio.com/items?itemName=bjoern621.helm-values-lens)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/bjoern621.helm-values-lens?color=0f5fb0)](https://marketplace.visualstudio.com/items?itemName=bjoern621.helm-values-lens)
+[![Marketplace](https://vsmarketplacebadges.dev/version-short/bjoern621.helm-values-lens.svg?label=Marketplace&color=0f5fb0)](https://marketplace.visualstudio.com/items?itemName=bjoern621.helm-values-lens)
+[![Installs](https://vsmarketplacebadges.dev/installs-short/bjoern621.helm-values-lens.svg?label=Installs&color=0f5fb0)](https://marketplace.visualstudio.com/items?itemName=bjoern621.helm-values-lens)
 [![CI](https://github.com/bjoern621/helm-values-lens/actions/workflows/ci.yml/badge.svg)](https://github.com/bjoern621/helm-values-lens/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0f5fb0)](LICENSE)
 
