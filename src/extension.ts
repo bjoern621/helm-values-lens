@@ -4,6 +4,7 @@ import { registerCodeActions } from "./editor/codeActions"
 import { registerCodeLens } from "./editor/codeLens"
 import { registerCompletion } from "./editor/completion"
 import { registerNavigation } from "./editor/navigation"
+import { registerRename } from "./editor/rename"
 import { registerCommands } from "./editor/commands"
 import { DIAGNOSTIC_SOURCE, SETTINGS_SECTION } from "./editor/config"
 import { Diagnostics } from "./editor/diagnostics"
@@ -46,6 +47,7 @@ export function activate(context: vscode.ExtensionContext): void {
         registerCodeLens(state),
         registerCompletion(state),
         ...registerNavigation(state),
+        registerRename(state),
         ...registerCommands(state, indexer, docs, workingFile),
         watcher,
         watcher.onDidCreate(() => indexer.scheduleReindex(false)),

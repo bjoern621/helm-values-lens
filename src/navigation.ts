@@ -54,13 +54,7 @@ export function settingPlaces(release: Release, path: ValuePath): Place[] {
  */
 export function templateReadPlaces(release: Release, path: ValuePath, exact: boolean): Place[] {
     const places: Place[] = []
-    const dirs = [
-        release.chart.dir,
-        ...release.chart.dependencies
-            .filter((dependency) => !release.disabled.has(dependency.key))
-            .map((dependency) => dependency.dir)
-    ]
-    for (const dir of dirs) {
+    for (const dir of templateDirs(release)) {
         for (const fsPath of templateFiles(join(dir, "templates"))) {
             let text: string
             try {
@@ -77,6 +71,16 @@ export function templateReadPlaces(release: Release, path: ValuePath, exact: boo
         }
     }
     return places
+}
+
+/** The folders of the chart and of each dependency that the release turns on. */
+export function templateDirs(release: Release): string[] {
+    return [
+        release.chart.dir,
+        ...release.chart.dependencies
+            .filter((dependency) => !release.disabled.has(dependency.key))
+            .map((dependency) => dependency.dir)
+    ]
 }
 
 /** A values file that a deployment file names, with the span of its name in that file. */

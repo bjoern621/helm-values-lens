@@ -52,6 +52,9 @@ A repository that deploys with one of them needs no settings.
   A template that reads a map around the key, such as `toYaml .Values.resources`, counts as well.
 - A link on each values file that an Application, a Helmfile release, a HelmRelease or a kustomization names, such as `$values/envs/prod.yaml`.
   `Ctrl+click` opens the file.
+- Rename Symbol (`F2`) on a key or a `.Values` read: the new name in every layer of each release that sets the key and in every template line that reads it.
+  A parameter such as `podAnnotations.team` changes with it.
+  Where the rename would leave the old name behind, such as under `toYaml .Values.resources`, it changes nothing and names the cause.
 
 ![A chart template that renders an Argo CD Application, with the final value after each .Values read and a summary of each release above metadata.name](docs/template.png)
 

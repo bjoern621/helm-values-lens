@@ -91,6 +91,6 @@ function locations(places: readonly Place[]): vscode.Location[] {
     return unique.map((place) => new vscode.Location(vscode.Uri.file(place.fsPath), rangeOf(place)))
 }
 
-function rangeOf(place: Place): vscode.Range {
+export function rangeOf(place: Place): vscode.Range {
     return new vscode.Range(place.start.line, place.start.column, place.end.line, place.end.column)
 }

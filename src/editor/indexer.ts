@@ -236,7 +236,7 @@ export class Indexer implements vscode.Disposable {
 }
 
 /** Reads a file from its editor where one holds it open, from the disk otherwise. */
-function editorText(fsPath: string): string {
+export function editorText(fsPath: string): string {
     return (
         vscode.workspace.textDocuments
             .find((document) => document.uri.fsPath === fsPath)
