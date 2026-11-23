@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.10.0 (2026-11-23)
+
 ### Added
 
 - The extension comes from the VS Code Marketplace, with an icon of its own.
