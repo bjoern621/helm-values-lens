@@ -147,6 +147,16 @@ export function isPlainMap(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
+/** Whether two values hold the same data, as Helm would render them. */
+export function sameValue(a: unknown, b: unknown): boolean {
+    return JSON.stringify(a) === JSON.stringify(b)
+}
+
+/** What the layer at `layerIndex` sets at `path`, or undefined where it leaves the path alone. */
+export function settingOf(trace: Trace, layerIndex: number, path: ValuePath): Setting | undefined {
+    return trace.settings.get(pathKey(path))?.find((setting) => setting.layerIndex === layerIndex)
+}
+
 /** The chain of one path, lowest layer first, with the value that the chart renders with. */
 export interface Explanation {
     path: ValuePath

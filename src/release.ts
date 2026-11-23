@@ -172,26 +172,30 @@ export function isUnknownKey(release: Release, path: ValuePath): boolean {
         const ancestor = pathKey(path.slice(0, length))
         if (readPaths.has(ancestor) && !readsBelow(readPaths, ancestor)) return false
     }
-    const defaults = trace.layers.slice(0, firstUserLayer)
-    const defaultAt = (prefix: ValuePath) => {
-        for (const layer of defaults) {
-            const value = valueAt(layer.data, prefix)
-            if (value !== undefined) return value
-        }
-        return undefined
-    }
-    if (defaultAt(path) !== undefined) return false
+    if (chartDefault(release, path) !== undefined) return false
     const key = pathKey(path)
     if (readPaths.has(key) || readsBelow(readPaths, key)) return false
     for (let length = path.length - 1; length >= 0; length--) {
         const ancestor =
             length === 0
-                ? defaults.map((layer) => layer.data).find(isPlainMap)
-                : defaultAt(path.slice(0, length))
+                ? trace.layers
+                      .slice(0, firstUserLayer)
+                      .map((layer) => layer.data)
+                      .find(isPlainMap)
+                : chartDefault(release, path.slice(0, length))
         if (ancestor === undefined) continue
         return isPlainMap(ancestor) && Object.keys(ancestor).length > 0
     }
     return false
+}
+
+/** The value that the chart defaults of a release give `path`, or undefined where they leave it unset. */
+export function chartDefault(release: Release, path: ValuePath): unknown {
+    for (const layer of release.trace.layers.slice(0, release.firstUserLayer)) {
+        const value = valueAt(layer.data, path)
+        if (value !== undefined) return value
+    }
+    return undefined
 }
 
 function readsBelow(readPaths: Set<string>, key: string): boolean {

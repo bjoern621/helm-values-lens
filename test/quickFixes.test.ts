@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest"
 import { coalesce, type Layer } from "../src/coalesce"
 import {
+    documentEdits,
     removableAsDefault,
     removeKeysEdits,
     renameKeyEdit,
     similarKeys,
-    type TextEdit
+    type TextEdit,
+    valuesRegion
 } from "../src/quickFixes"
 import type { Release } from "../src/release"
-import { parseValues, pathKey } from "../src/yamlPaths"
+import { parseValues, pathKey, splitPathKey } from "../src/yamlPaths"
 
 const layer = (label: string, text: string, kind: Layer["kind"] = "file"): Layer => {
     const { data, sites } = parseValues(text)
@@ -97,5 +99,105 @@ describe("an unknown key", () => {
         expect(apply(text, [renameKeyEdit(text, ["image", "tga"], "tag")!])).toBe(
             "image:\n  tag: v2 # pinned\n"
         )
+    })
+})
+
+describe("a values block inside an Application", () => {
+    const APPLICATION = [
+        "spec:",
+        "  source:",
+        "    helm:",
+        "      values: |",
+        "        replicas: 1",
+        "        image:",
+        "          tag: latest",
+        "      valueFiles: []",
+        ""
+    ].join("\n")
+    const inline = (): Layer => {
+        const { data, sites } = parseValues("replicas: 1\nimage:\n  tag: latest\n")
+        return {
+            kind: "inline",
+            label: "helm.values",
+            fsPath: "/app.yaml",
+            offset: { lineDelta: 4, columnDelta: 8 },
+            data,
+            sites
+        }
+    }
+
+    it("cuts the block out of the document without its indent", () => {
+        const region = valuesRegion(APPLICATION, inline())!
+        expect(region.text).toBe("replicas: 1\nimage:\n  tag: latest\n")
+    })
+
+    it("removes a key from the document with its whole line", () => {
+        const region = valuesRegion(APPLICATION, inline())!
+        const edits = documentEdits(
+            APPLICATION,
+            region,
+            removeKeysEdits(region.text, [["replicas"]])!
+        )
+        expect(apply(APPLICATION, edits)).toBe(APPLICATION.replace("        replicas: 1\n", ""))
+    })
+
+    it("removes a map that the removal leaves empty", () => {
+        const region = valuesRegion(APPLICATION, inline())!
+        const edits = documentEdits(
+            APPLICATION,
+            region,
+            removeKeysEdits(region.text, [["image", "tag"]])!
+        )
+        expect(apply(APPLICATION, edits)).toBe(
+            APPLICATION.replace("        image:\n          tag: latest\n", "")
+        )
+    })
+
+    it("renames a key in the document", () => {
+        const region = valuesRegion(APPLICATION, inline())!
+        const edits = documentEdits(APPLICATION, region, [
+            renameKeyEdit(region.text, ["replicas"], "replicaCount")!
+        ])
+        expect(apply(APPLICATION, edits)).toBe(
+            APPLICATION.replace("replicas: 1", "replicaCount: 1")
+        )
+    })
+
+    it("finds a valuesObject map from the place of its keys", () => {
+        const document = [
+            "spec:",
+            "  source:",
+            "    helm:",
+            "      valuesObject:",
+            "        replicas: 1",
+            "        image:",
+            "          tag: latest",
+            "  destination: {}",
+            ""
+        ].join("\n")
+        const { data, sites } = parseValues(document)
+        const shifted = new Map(
+            [...sites]
+                .filter(([key]) =>
+                    key.startsWith(pathKey(["spec", "source", "helm", "valuesObject"]))
+                )
+                .map(([key, site]) => [pathKey(splitPathKey(key).slice(4)), site])
+        )
+        const layer: Layer = {
+            kind: "object",
+            label: "helm.valuesObject",
+            fsPath: "/app.yaml",
+            offset: undefined,
+            data,
+            sites: shifted
+        }
+        const region = valuesRegion(document, layer)!
+        expect(region.text).toBe("replicas: 1\nimage:\n  tag: latest\n")
+        const edits = documentEdits(document, region, removeKeysEdits(region.text, [["replicas"]])!)
+        expect(apply(document, edits)).toBe(document.replace("        replicas: 1\n", ""))
+    })
+
+    it("offers no region for parameters", () => {
+        expect(valuesRegion(APPLICATION, { ...inline(), kind: "parameters" })).toBeUndefined()
     })
 })

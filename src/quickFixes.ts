@@ -1,7 +1,8 @@
 import { isMap, isScalar, type Node, type Pair, parseDocument, type YAMLMap } from "yaml"
-import { isPlainMap, valueAt } from "./coalesce"
-import { isUnknownKey, type Release } from "./release"
-import { pathKey, splitPathKey, type ValuePath } from "./yamlPaths"
+import { isPlainMap, type Layer, sameValue, settingOf, valueAt } from "./coalesce"
+import { type SettingSite, settingSites, siteEnd } from "./hints"
+import { chartDefault, isUnknownKey, type Release } from "./release"
+import { type Offset, pathKey, type Position, splitPathKey, type ValuePath } from "./yamlPaths"
 
 /** Replaces the text between two offsets of a document. */
 export interface TextEdit {
@@ -10,29 +11,150 @@ export interface TextEdit {
     text: string
 }
 
+/** The settings of one key of a file, one for each release and layer that reads it there. */
+export interface KeyGroup {
+    path: ValuePath
+    key: Position
+    end: Position
+    sites: SettingSite[]
+}
+
+/** Groups the keys that `releases` set in the file at `fsPath` by their place in the file. */
+export function keyGroups(fsPath: string, releases: readonly Release[]): KeyGroup[] {
+    const groups = new Map<string, KeyGroup>()
+    for (const site of settingSites(fsPath, releases)) {
+        const place = `${site.key.line}:${site.key.column}`
+        const group = groups.get(place)
+        if (group === undefined)
+            groups.set(place, { path: site.path, key: site.key, end: siteEnd(site), sites: [site] })
+        else group.sites.push(site)
+    }
+    return [...groups.values()]
+}
+
+/** Whether removing the key leaves the final values of every release that reads it unchanged. */
+export function removableGroup(group: KeyGroup): boolean {
+    return group.sites.every((site) => removableAsDefault(site.release, site.layerIndex, site.path))
+}
+
+/** The user settings of the key that the chart of their release neither defaults nor reads. */
+export function unknownSites(group: KeyGroup): SettingSite[] {
+    return group.sites.filter(
+        (site) =>
+            site.layerIndex >= site.release.firstUserLayer && isUnknownKey(site.release, site.path)
+    )
+}
+
+/** The layer that holds the key. Every site of a group sits in the same text. */
+export function groupLayer(group: KeyGroup): Layer {
+    const site = group.sites[0]!
+    return site.release.trace.layers[site.layerIndex]!
+}
+
 /**
  * Whether removing the setting of `path` from the layer at `layerIndex` leaves the final values unchanged.
  * That holds for a scalar equal to the chart default that no user layer below sets as well.
  */
 export function removableAsDefault(release: Release, layerIndex: number, path: ValuePath): boolean {
     if (layerIndex < release.firstUserLayer) return false
-    const settings = release.trace.settings.get(pathKey(path)) ?? []
-    const own = settings.find((setting) => setting.layerIndex === layerIndex)
+    const own = settingOf(release.trace, layerIndex, path)
     if (own === undefined || own.status !== "wins" || isPlainMap(own.value)) return false
-    const userBelow = settings.some(
+    const userBelow = (release.trace.settings.get(pathKey(path)) ?? []).some(
         (setting) => setting.layerIndex >= release.firstUserLayer && setting.layerIndex < layerIndex
     )
     if (userBelow) return false
     const fallback = chartDefault(release, path)
-    return fallback !== undefined && JSON.stringify(fallback) === JSON.stringify(own.value)
+    return fallback !== undefined && sameValue(fallback, own.value)
 }
 
-function chartDefault(release: Release, path: ValuePath): unknown {
-    for (const layer of release.trace.layers.slice(0, release.firstUserLayer)) {
-        const value = valueAt(layer.data, path)
-        if (value !== undefined) return value
+/** A values text inside a document, with the shift from a position in the text to its place in the document. */
+export interface ValuesRegion {
+    text: string
+    offset: Offset
+}
+
+/**
+ * Finds the text of a layer in the document that holds it: a whole values file, or the block under `helm.values` or `helm.valuesObject`.
+ * Undefined for a layer that no fix can edit, such as parameters, a quoted string or a flow map.
+ */
+export function valuesRegion(documentText: string, layer: Layer): ValuesRegion | undefined {
+    switch (layer.kind) {
+        case "file":
+            return { text: documentText, offset: { lineDelta: 0, columnDelta: 0 } }
+        case "inline":
+            return layer.offset === undefined ? undefined : blockRegion(documentText, layer.offset)
+        case "object":
+            return objectRegion(documentText, layer)
+        default:
+            return undefined
     }
-    return undefined
+}
+
+/** The region of a map in the document, found from the place of its top-level keys. */
+function objectRegion(documentText: string, layer: Layer): ValuesRegion | undefined {
+    const keys = [...layer.sites]
+        .filter(([key]) => splitPathKey(key).length === 1)
+        .map(([, site]) => site.key)
+    if (keys.length === 0) return undefined
+    const column = keys[0]!.column
+    const lines = documentText.split("\n")
+    const block = keys.every(
+        (key) => key.column === column && lines[key.line]?.slice(0, column).trim() === ""
+    )
+    if (!block) return undefined
+    const lineDelta = Math.min(...keys.map((key) => key.line))
+    return blockRegion(documentText, { lineDelta, columnDelta: column })
+}
+
+/** The lines from `offset.lineDelta` on that sit indented by `offset.columnDelta` or more, with the indent cut. */
+function blockRegion(documentText: string, offset: Offset): ValuesRegion {
+    const lines = documentText.split("\n")
+    const block: string[] = []
+    for (let line = offset.lineDelta; line < lines.length; line++) {
+        const text = lines[line]!
+        if (text.trim() !== "" && text.length - text.trimStart().length < offset.columnDelta) break
+        block.push(text.slice(offset.columnDelta))
+    }
+    while (block.length > 0 && block.at(-1)!.trim() === "") block.pop()
+    return { text: block.map((line) => line + "\n").join(""), offset }
+}
+
+/**
+ * Moves edits of the text of a region to the document that holds it.
+ * A deletion of whole lines takes their indent along.
+ */
+export function documentEdits(
+    documentText: string,
+    region: ValuesRegion,
+    edits: readonly TextEdit[]
+): TextEdit[] {
+    const { lineDelta, columnDelta } = region.offset
+    if (lineDelta === 0 && columnDelta === 0) return [...edits]
+    const regionStarts = lineStarts(region.text)
+    const documentStarts = lineStarts(documentText)
+    const lineStart = (line: number) => documentStarts[line] ?? documentText.length
+    const place = (offset: number, wholeLine: boolean) => {
+        let line = regionStarts.length - 1
+        while (regionStarts[line]! > offset) line--
+        const start = lineStart(line + lineDelta)
+        return wholeLine ? start : start + columnDelta + offset - regionStarts[line]!
+    }
+    const atLineStart = (offset: number) => offset === 0 || region.text[offset - 1] === "\n"
+    return edits.map((edit) => {
+        const wholeLines = edit.text === "" && atLineStart(edit.start) && atLineStart(edit.end)
+        return {
+            start: place(edit.start, wholeLines),
+            end: place(edit.end, wholeLines),
+            text: edit.text
+        }
+    })
+}
+
+function lineStarts(text: string): number[] {
+    const starts = [0]
+    for (let index = text.indexOf("\n"); index !== -1; index = text.indexOf("\n", index + 1))
+        starts.push(index + 1)
+    return starts
 }
 
 /**

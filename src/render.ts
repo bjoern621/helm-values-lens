@@ -79,11 +79,15 @@ function resourcesOf(manifests: string): Map<string, string> {
     return resources
 }
 
+/** The resources that a render changed against the render before it. */
+export interface ResourceChanges {
+    added: string[]
+    removed: string[]
+    changed: string[]
+}
+
 /** Names the resources that a new render added, removed or changed against the last one. */
-export function changedResources(
-    before: Rendered,
-    after: Rendered
-): { added: string[]; removed: string[]; changed: string[] } {
+export function changedResources(before: Rendered, after: Rendered): ResourceChanges {
     const added = [...after.resources.keys()].filter((key) => !before.resources.has(key))
     const removed = [...before.resources.keys()].filter((key) => !after.resources.has(key))
     const changed = [...after.resources.keys()].filter(

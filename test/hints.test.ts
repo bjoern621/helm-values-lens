@@ -4,7 +4,8 @@ import { join } from "node:path"
 import { beforeAll, describe, expect, it } from "vitest"
 import { explain } from "../src/coalesce"
 import { annotatedFinalValues } from "../src/finalValues"
-import { chainMarkdown, templateHints, valueHints } from "../src/hints"
+import { targetsAt, templateHints, valueHints } from "../src/hints"
+import { chainMarkdown } from "../src/markdown"
 import type { Release } from "../src/release"
 import { findReleases, loadRelease } from "../src/workspace"
 import { FIXTURES, fixtureCheckout } from "./fixtures"
@@ -149,5 +150,35 @@ describe("the final values", () => {
         expect(text).toContain(`replicas: 3 # helm.values:${lineOf(APP, "replicas: 3") + 1}`)
         expect(text).toContain('tag: "2.0" # envs/prod.yaml:2')
         expect(text).toContain("repository: myrepo # helm.parameters")
+    })
+})
+
+describe("the target under the cursor", () => {
+    const CONFIGMAP = join(FIXTURES, "charts/app/templates/configmap.yaml")
+    const targetAt = (fsPath: string, line: number, column: number) => {
+        const lineText = readFileSync(fsPath, "utf8").split("\n")[line]!
+        return targetsAt(fsPath, lineText, { line, column }, [release]).map((target) =>
+            target.path.join(".")
+        )
+    }
+
+    it("takes the one .Values read of a line that the cursor sits on", () => {
+        const line = lineOf(CONFIGMAP, "image:")
+        const text = readFileSync(CONFIGMAP, "utf8").split("\n")[line]!
+        expect(targetAt(CONFIGMAP, line, text.indexOf("repository"))).toEqual(["image.repository"])
+        expect(targetAt(CONFIGMAP, line, text.indexOf("tag"))).toEqual(["image.tag"])
+        expect(targetAt(CONFIGMAP, line, 0)).toEqual([])
+    })
+
+    it("takes a key of a values file from its name to the end of its value", () => {
+        const line = lineOf(BASE, "replicas: 2")
+        expect(targetAt(BASE, line, 0)).toEqual(["replicas"])
+        expect(targetAt(BASE, line, "replicas: 2".length)).toEqual(["replicas"])
+    })
+
+    it("takes a key of the inline block of an Application", () => {
+        const line = lineOf(APP, "replicas: 3")
+        const text = readFileSync(APP, "utf8").split("\n")[line]!
+        expect(targetAt(APP, line, text.indexOf("replicas"))).toEqual(["replicas"])
     })
 })

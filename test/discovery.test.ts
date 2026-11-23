@@ -1,7 +1,8 @@
+import { readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { valueHints } from "../src/hints"
+import { targetsAt, valueHints } from "../src/hints"
 import type { Release } from "../src/release"
 import {
     checkoutsOf,
@@ -66,9 +67,14 @@ describe.skipIf(!hasHelm)("discover", () => {
     const named = (name: string) => releases.find((release) => release.spec.name === name)!
 
     it("renders the platform chart of each cluster and reads the Applications in the output", async () => {
-        const discovery = await discover([GITOPS], CACHE, "helm")
+        const progress: [number, number][] = []
+        const discovery = await discover([GITOPS], CACHE, "helm", {
+            onProgress: (done, total) => progress.push([done, total])
+        })
         releases = discovery.releases
         expect(discovery.failures).toEqual([])
+        expect(progress.at(-1)).toEqual([7, 7])
+        expect(progress.every(([done, total]) => done <= total)).toBe(true)
         expect(releases.map((release) => release.spec.name).sort()).toEqual([
             "platform",
             "platform",
@@ -116,6 +122,19 @@ describe.skipIf(!hasHelm)("discover", () => {
         const labels = valueHints(values, [named("web-production")]).map((hint) => hint.label)
         expect(labels).toContain("also set by values-production.yaml")
         expect(labels).toContain("overridden by helm.valuesObject: 3")
+    })
+
+    it("names the .Values read under the cursor, not the key whose value holds it", () => {
+        const template = join(GITOPS, "charts", "platform", "templates", "web.yaml")
+        const lines = readFileSync(template, "utf8").split("\n")
+        const line = lines.findIndex((text) => text.includes("replicas: {{"))
+        const text = lines[line]!
+        const pathsAt = (column: number) =>
+            targetsAt(template, text, { line, column }, releases).map((target) =>
+                target.path.join(".")
+            )
+        expect(new Set(pathsAt(text.indexOf(".Values")))).toEqual(new Set(["web.replicas"]))
+        expect(new Set(pathsAt(text.indexOf("replicas")))).toEqual(new Set(["replicas"]))
     })
 
     it("agrees with the COMPUTED VALUES of helm for every release", () => {

@@ -12,6 +12,7 @@ import {
 import { chartDir, loadChart } from "./chart"
 import type { LoadedChart } from "./chart"
 import { buildRelease, type ReadText, readFromDisk, type Release } from "./release"
+import { firstLine } from "./text"
 import { type Rendered, renderRelease } from "./render"
 import { readApplicationSets } from "./sources/applicationSet"
 import { readFluxHelmReleases } from "./sources/flux"
@@ -421,10 +422,6 @@ export async function loadRelease(
     return release
 }
 
-function firstLine(error: unknown): string {
-    return String(error instanceof Error ? error.message : error).split("\n")[0]!
-}
-
 /** A release that did not load, with the reason. */
 export interface Failure {
     spec: ReleaseSpec
@@ -452,6 +449,8 @@ export async function discover(
         charts?: Map<string, LoadedChart>
         /** Renders of an earlier discovery, taken in place of rendering the same release again. */
         renders?: ReadonlyMap<string, Rendered>
+        /** Called after each release loads. The total grows as renders turn up Applications. */
+        onProgress?: (done: number, total: number) => void
     } = {}
 ): Promise<Discovery> {
     const readText = options.readText ?? readFromDisk
@@ -465,50 +464,72 @@ export async function discover(
         index
     }
     const seen = new Set<string>()
+    const progress = { done: 0, total: 0 }
+    const report = () => options.onProgress?.(progress.done, progress.total)
     const rendersApps = new Map<string, boolean>()
-    const visit = async (spec: ReleaseSpec, depth: number): Promise<void> => {
-        if (seen.has(spec.id)) return
-        seen.add(spec.id)
+    /** Loads a release and renders a chart that renders Applications, handing back the Applications it found. */
+    const visit = async (spec: ReleaseSpec, depth: number): Promise<ReleaseSpec[]> => {
         let release: Release
         try {
             release = await loadRelease(spec, cacheDir, helmPath, readText, charts, index.charts)
         } catch (error) {
             discovery.failures.push({ spec, reason: firstLine(error) })
-            return
+            return []
         }
         discovery.releases.push(release)
-        if (depth >= MAX_APPLICATION_DEPTH) return
+        if (depth >= MAX_APPLICATION_DEPTH) return []
         const dir = release.chart.dir
         if (!rendersApps.has(dir)) rendersApps.set(dir, rendersApplications(dir))
-        if (rendersApps.get(dir) !== true) return
+        if (rendersApps.get(dir) !== true) return []
         let rendered = options.renders?.get(spec.id)
         try {
             rendered ??= await renderRelease(release, helmPath)
         } catch (error) {
             discovery.renderErrors.set(spec.id, (error as Error).message)
-            return
+            return []
         }
         discovery.rendered.set(spec.id, rendered)
-        const children = renderedApplications(release, rendered.manifests, checkoutOf, readText)
-        await inBatches(children, (child) => visit(child, depth + 1))
+        return renderedApplications(release, rendered.manifests, checkoutOf, readText)
     }
-    await inBatches(specs, (spec) => visit(spec, 1))
+    /** Visits the releases that no earlier step visited, counting each for the progress. */
+    const visitAll = async (items: readonly ReleaseSpec[], depth: number): Promise<void> => {
+        const fresh: ReleaseSpec[] = []
+        for (const spec of items) {
+            if (seen.has(spec.id)) continue
+            seen.add(spec.id)
+            fresh.push(spec)
+        }
+        progress.total += fresh.length
+        report()
+        await inBatches(fresh, async (spec) => {
+            const children = await visit(spec, depth)
+            progress.done++
+            report()
+            await visitAll(children, depth + 1)
+        })
+    }
+    await visitAll(specs, 1)
     // A chart that only rendered Applications use gets no guessed release, so the guesses wait for the renders.
     const used = [
         ...discovery.releases.map((release) => release.spec),
         ...discovery.failures.map((failure) => failure.spec)
     ]
     const loadedDirs = discovery.releases.map((release) => release.chart.dir)
-    await inBatches(chartReleases(index, used, loadedDirs), (spec) => visit(spec, 1))
+    await visitAll(chartReleases(index, used, loadedDirs), 1)
     return discovery
 }
 
-async function inBatches<T>(items: readonly T[], work: (item: T) => Promise<void>): Promise<void> {
+/** Runs `work` on each item, a few items at a time. */
+export async function inBatches<T>(
+    items: readonly T[],
+    work: (item: T) => Promise<void>,
+    concurrency = DISCOVERY_CONCURRENCY
+): Promise<void> {
     let next = 0
     const worker = async () => {
         while (next < items.length) await work(items[next++]!)
     }
-    await Promise.all(Array.from({ length: Math.min(DISCOVERY_CONCURRENCY, items.length) }, worker))
+    await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker))
 }
 
 /**
