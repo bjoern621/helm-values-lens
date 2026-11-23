@@ -74,26 +74,41 @@ export function chainMarkdown(
         const name = layerName(release, layerIndex, fromFile)
         if (setting === undefined) {
             if (!allLayers || layerIndex < chartDefaults) return
-            const link = layerLink(layer, name, fileLinkOf(layer), fromFile)
+            const link = layerLink(
+                name,
+                fileLinkOf(layer),
+                isOpenLayer(release, layerIndex, fromFile)
+            )
             lines.push(`$(circle-small) *not set* · ${link}`)
             return
         }
-        const link = layerLink(layer, name, siteLink(release, layerIndex, path), fromFile)
+        const link = layerLink(
+            name,
+            siteLink(release, layerIndex, path),
+            isOpenLayer(release, layerIndex, fromFile)
+        )
         lines.push(`${settingMark(setting, final)} · ${link}: \`${preview(setting.value, 60)}\``)
     })
     return lines.join("\n\n")
 }
 
+/** Links the name of a layer, or shows it in green without a link for the layer of the open file. */
+function layerLink(name: string, href: string | undefined, open: boolean): string {
+    if (open) return `<span style="color:var(--vscode-charts-green);">${name}</span>`
+    return href === undefined ? name : `[${name}](${href})`
+}
+
 /**
- * Links the name of a layer, in green where the layer sits in the file under the cursor.
- * The colour sits inside the link, since VS Code paints a link in its own colour.
+ * Whether the layer at `layerIndex` comes from the open file.
+ * A chart default layer of the open file counts only where no user layer reads the file again, as one that lists the chart's `values.yaml` under `valueFiles` does.
  */
-function layerLink(layer: Layer, name: string, href: string | undefined, fromFile: string): string {
-    const label =
-        layer.fsPath === fromFile
-            ? `<span style="color:var(--vscode-charts-green);">${name}</span>`
-            : name
-    return href === undefined ? label : `[${label}](${href})`
+function isOpenLayer(release: Release, layerIndex: number, fromFile: string): boolean {
+    const layers = release.trace.layers
+    if (layers[layerIndex]!.fsPath !== fromFile) return false
+    return (
+        layerIndex >= release.firstUserLayer ||
+        !layers.slice(release.firstUserLayer).some((layer) => layer.fsPath === fromFile)
+    )
 }
 
 function fileLinkOf(layer: Layer): string | undefined {
@@ -134,10 +149,9 @@ export function releaseMarkdown(release: Release, fromFile: string, render: Rend
     release.trace.layers.forEach((layer, layerIndex) => {
         if (layerIndex < release.firstUserLayer - 1) return
         const link = layerLink(
-            layer,
             layerName(release, layerIndex, fromFile),
             fileLinkOf(layer),
-            fromFile
+            isOpenLayer(release, layerIndex, fromFile)
         )
         const kind = layerIndex < release.firstUserLayer ? "chart defaults" : "values"
         lines.push(`$(layers) ${kind} · ${link}`)

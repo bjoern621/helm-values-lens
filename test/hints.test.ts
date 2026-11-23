@@ -157,6 +157,15 @@ describe("a chart values.yaml listed again under valueFiles", () => {
         expect(labelsOn("replicas: 1")).toEqual(["overridden by helm.values: 3"])
     })
 
+    it("shows the user layer of the file in green in the hover, the chart default layer as a link", () => {
+        const chain = chainMarkdown(twice, ["replicas"], CHART_VALUES)
+        expect(chain.match(/vscode-charts-green/g)).toHaveLength(1)
+        expect(chain).toContain("[chart values.yaml](")
+        expect(chain).toContain(
+            '<span style="color:var(--vscode-charts-green);">values.yaml</span>'
+        )
+    })
+
     it("calls no key of it equal to the chart default or set again by itself", () => {
         const labels = valueHints(CHART_VALUES, [twice]).map((hint) => hint.label)
         expect(labels.length).toBeGreaterThan(0)
@@ -168,14 +177,14 @@ describe("the hover chain", () => {
     it("colours the layer of the file under the cursor", () => {
         const chain = chainMarkdown(release, ["replicas"], BASE)
         expect(chain).toContain(
-            '[<span style="color:var(--vscode-charts-green);">values-base.yaml</span>]'
+            '*overridden* · <span style="color:var(--vscode-charts-green);">values-base.yaml</span>: '
         )
         expect(chain).toContain("[helm.values]")
     })
 
     it("marks each setting with what became of it", () => {
         const chain = chainMarkdown(release, ["replicas"], BASE)
-        expect(chain).toContain("$(circle-slash) *overridden* · [<span")
+        expect(chain).toContain("$(circle-slash) *overridden* · <span")
         expect(chain).toContain("$(verified-filled) *final* · [helm.values]")
         expect(chain).not.toContain("*not set*")
     })
