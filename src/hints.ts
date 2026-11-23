@@ -96,7 +96,8 @@ function placed(
 /**
  * Builds the hints for the values that `releases` read from the file at `fsPath`.
  * A setting that a later layer overrides, replaces or deletes names that layer and the final value.
- * A user setting equal to the chart default says so. A key that the chart neither defaults nor reads gets flagged.
+ * A user setting equal to the chart default says so.
+ * A key without a default in the chart and without a template that reads it gets flagged.
  * Several releases reading one file each prefix their hints with their name.
  */
 export function valueHints(fsPath: string, releases: readonly Release[]): Hint[] {

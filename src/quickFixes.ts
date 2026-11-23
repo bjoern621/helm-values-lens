@@ -37,7 +37,7 @@ export function removableGroup(group: KeyGroup): boolean {
     return group.sites.every((site) => removableAsDefault(site.release, site.layerIndex, site.path))
 }
 
-/** The user settings of the key that the chart of their release neither defaults nor reads. */
+/** The user settings of a key without a default in the chart of their release and without a template that reads it. */
 export function unknownSites(group: KeyGroup): SettingSite[] {
     return group.sites.filter(
         (site) =>

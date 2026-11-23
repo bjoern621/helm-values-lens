@@ -168,7 +168,8 @@ function templateFiles(dir: string): string[] {
 }
 
 /**
- * True if neither the chart defaults nor any template knows `path`, which points at a misspelled or outdated key.
+ * True if `path` has no default in the chart, no template that reads it and no entry in a schema.
+ * Such a key changes nothing in the release and most likely carries a typo or an outdated name.
  * A key under a default that holds an empty map or a scalar counts as known, since such a default takes keys of any name.
  * A read of the path or a key inside it counts as known.
  * A read of an ancestor that no template reads deeper counts as known too.

@@ -16,7 +16,8 @@ A repository holding one of those needs no settings.
 - Next to a value in a values file: the layer that overrides or deletes it, with the final value (`overridden by values-staging.yaml: 1.27-rc`).
 - Next to a value that a later layer sets to the same value: `also set by helm.valuesObject`.
 - Next to a value equal to the chart default: `= chart default`.
-- An information marker on a key that the chart neither defaults nor reads, most likely a misspelled or outdated key.
+- An information marker on a key without a default in the chart and without a template that reads it, such as `the chart web has no default for imgae.tag and no template that reads it`.
+  Such a key changes nothing in the release and most likely carries a typo or an outdated name.
 - Next to each `.Values` read in a chart template: the final value of the release.
 - On hover over a key or a `.Values` read: every layer of each release that reads the file, lowest first, each linked to its line.
   The hover covers the one path under the cursor, in a values file, in the values block of an Application and in a template alike.
