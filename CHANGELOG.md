@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Removed
+
+- The "Rendered in" line of the hover, which matched the value as text in the manifests and named resources that never read the key.
+
 ## v1.10.0 (2026-11-23)
 
 ### Added

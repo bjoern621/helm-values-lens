@@ -49,10 +49,10 @@ function inlayHints(state: LensState, document: vscode.TextDocument): vscode.Inl
         ...otherHints.filter((hint) => !covered.has(place(hint.start)))
     ]
         .filter((hint) => hint.kind !== "unknown")
-        .map((hint) => inlayHint(state, document, hint))
+        .map((hint) => inlayHint(document, hint))
 }
 
-function inlayHint(state: LensState, document: vscode.TextDocument, hint: Hint): vscode.InlayHint {
+function inlayHint(document: vscode.TextDocument, hint: Hint): vscode.InlayHint {
     const line = Math.min(hint.position.line, document.lineCount - 1)
     const text = document.lineAt(line).text
     const column = Math.min(hint.position.column, text.length)
@@ -60,7 +60,7 @@ function inlayHint(state: LensState, document: vscode.TextDocument, hint: Hint):
     const inlay = new vscode.InlayHint(new vscode.Position(line, column), hint.label)
     inlay.paddingLeft = true
     inlay.paddingRight = column < text.length && !/\s/.test(text.charAt(column))
-    inlay.tooltip = describe(state, hint.release, hint.path, document.uri.fsPath)
+    inlay.tooltip = describe(hint.release, hint.path, document.uri.fsPath)
     return inlay
 }
 
@@ -73,7 +73,7 @@ function hover(
     const fsPath = document.uri.fsPath
     const releases = state.fileReleases(fsPath)
     const targets = targetsUnderCursor(state, document, position)
-    if (targets.length > 0) return targetHover(state, fsPath, targets, releases)
+    if (targets.length > 0) return targetHover(fsPath, targets, releases)
     const lineText = document.lineAt(position.line).text
     return releaseHover(state, fsPath, lineText, position.line, releases)
 }
@@ -110,12 +110,11 @@ export function everyTargetUnderCursor(
 }
 
 function targetHover(
-    state: LensState,
     fsPath: string,
     targets: readonly Target[],
     releases: FileReleases
 ): vscode.Hover {
-    const sections = targets.map((target) => markdownOf(state, target.release, target.path, fsPath))
+    const sections = targets.map((target) => markdownOf(target.release, target.path, fsPath))
     const hidden = releases.others.length
     const shownOnly = targets.every((target) => releases.shown.includes(target.release))
     if (hidden > 0 && shownOnly)
@@ -160,13 +159,8 @@ function releaseHover(
     )
 }
 
-function describe(
-    state: LensState,
-    release: Release,
-    path: ValuePath,
-    fsPath: string
-): vscode.MarkdownString {
-    return hoverMarkdown(markdownOf(state, release, path, fsPath))
+function describe(release: Release, path: ValuePath, fsPath: string): vscode.MarkdownString {
+    return hoverMarkdown(markdownOf(release, path, fsPath))
 }
 
 /** Markdown with theme icons and the HTML that colours the layer of the current file. */
@@ -176,10 +170,9 @@ function hoverMarkdown(text: string): vscode.MarkdownString {
     return markdown
 }
 
-function markdownOf(state: LensState, release: Release, path: ValuePath, fsPath: string): string {
+function markdownOf(release: Release, path: ValuePath, fsPath: string): string {
     return pathMarkdown(release, path, fsPath, {
-        allLayers: readSettings().showAllLayers,
-        rendered: state.rendered(release.spec.id)
+        allLayers: readSettings().showAllLayers
     })
 }
 

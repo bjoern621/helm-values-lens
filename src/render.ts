@@ -95,14 +95,3 @@ export function changedResources(before: Rendered, after: Rendered): ResourceCha
     )
     return { added, removed, changed }
 }
-
-/**
- * Finds the rendered resources whose text holds `value`, to show where a value lands.
- * A value shorter than four characters or a boolean finds nothing, since it would match everywhere.
- */
-export function resourcesHolding(rendered: Rendered, value: unknown): string[] {
-    if (typeof value !== "string" && typeof value !== "number") return []
-    const text = String(value)
-    if (text.length < 4) return []
-    return [...rendered.resources].filter(([, body]) => body.includes(text)).map(([key]) => key)
-}

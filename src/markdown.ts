@@ -3,18 +3,13 @@ import { sameValue, valueAt } from "./coalesce"
 import { fileLink, layerName, preview, releaseTitle, siteLink } from "./hints"
 import { isUnknownKey, type Release } from "./release"
 import { type SchemaField, schemaField } from "./schema"
-import { type Rendered, resourcesHolding } from "./render"
-import { countOf, listed } from "./text"
+import type { Rendered } from "./render"
+import { countOf } from "./text"
 import { dottedPath, pathKey, type ValuePath } from "./yamlPaths"
-
-/** How many resources "Rendered in" names before it counts the rest. */
-const RENDERED_IN_SHOWN = 5
 
 export interface PathDetails {
     /** Lists every layer from the chart's own defaults up, the ones that leave the path alone included. */
     allLayers: boolean
-    /** The last render of the release, which adds the resources that hold the final value. */
-    rendered: Rendered | undefined
 }
 
 /**
@@ -34,11 +29,6 @@ export function pathMarkdown(
         )
     const field = schemaField(release.chart.schemas, path)
     if (field !== undefined) sections.push(...schemaMarkdown(field))
-    if (details.rendered !== undefined) {
-        const holders = resourcesHolding(details.rendered, valueAt(release.trace.final, path))
-        const names = holders.map((holder) => `\`${holder}\``)
-        if (holders.length > 0) sections.push(`Rendered in ${listed(names, RENDERED_IN_SHOWN)}`)
-    }
     return sections.join("\n\n")
 }
 
