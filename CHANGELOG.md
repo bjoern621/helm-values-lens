@@ -5,6 +5,7 @@
 ### Changed
 
 - One entry of the release picker covers an Application and the Applications that its chart renders (listed each apart).
+- The release picker shows the entry that the hints follow on top, marked "current".
 
 ## v1.10.1 (2026-11-23)
 

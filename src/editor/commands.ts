@@ -93,16 +93,34 @@ async function selectRelease(state: LensState, workingFile: WorkingFile): Promis
         description: "names each release in its hints",
         id: ALL_RELEASES
     }
-    const items = [
-        ...(releases.length > 1 ? [all] : []),
-        ...releases.map((release) => releaseItem(release, root))
-    ]
+    const items = withCurrentFirst(
+        [
+            ...(releases.length > 1 ? [all] : []),
+            ...releases.map((release) => releaseItem(release, root))
+        ],
+        choices.length > 0 ? (state.focused(choices)?.spec.id ?? ALL_RELEASES) : undefined
+    )
     const picked = await vscode.window.showQuickPick(items, {
         placeHolder: "Release whose values the hints show",
         matchOnDescription: true,
         matchOnDetail: true
     })
     if (picked !== undefined) await state.setFocus(picked.id)
+}
+
+/** Moves the entry that the hints follow to the top, under a separator labelled "current". */
+function withCurrentFirst(
+    items: readonly ReleaseItem[],
+    currentId: string | undefined
+): ReleaseItem[] {
+    const current = items.find((item) => item.id === currentId)
+    if (current === undefined) return [...items]
+    const rest = items.filter((item) => item !== current)
+    return [separator("current"), current, ...(rest.length > 0 ? [separator("")] : []), ...rest]
+}
+
+function separator(label: string): ReleaseItem {
+    return { label, kind: vscode.QuickPickItemKind.Separator, id: "" }
 }
 
 /** Lets the user pick a values file or template of the chart, which may sit in the chart cache outside the workspace. */
