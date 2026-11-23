@@ -57,7 +57,7 @@ Above each Application, Helmfile release, HelmRelease or kustomization: its laye
 
 ## One file, many releases
 
-![The release picker lists All releases, web-production and web-staging](docs/release-picker.png)
+![The release picker lists web-production on top, marked current, then All releases and web-staging](docs/release-picker.png)
 
 One values file often feeds staging and production.
 Click the release in the status bar to pick the one whose values the hints show.
