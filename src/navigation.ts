@@ -38,6 +38,11 @@ export function defaultPlace(release: Release, path: ValuePath): Place | undefin
     return last === undefined ? undefined : settingPlace(release, last.layerIndex, path)
 }
 
+/** Where the value of `path` first gets set: its default in the chart, or the lowest layer that sets it for a path without one. */
+export function originPlace(release: Release, path: ValuePath): Place | undefined {
+    return defaultPlace(release, path) ?? settingPlaces(release, path)[0]
+}
+
 /** Every place where a layer of the release sets `path`, lowest layer first. */
 export function settingPlaces(release: Release, path: ValuePath): Place[] {
     return (release.trace.settings.get(pathKey(path)) ?? []).flatMap((setting) => {

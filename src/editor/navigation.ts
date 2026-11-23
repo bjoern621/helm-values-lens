@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 import { templatePrefix } from "../hints"
 import {
-    defaultPlace,
+    originPlace,
     type Place,
     settingPlaces,
     templateReadPlaces,
@@ -32,7 +32,9 @@ export function registerNavigation(state: LensState): vscode.Disposable[] {
 
 /**
  * From a `.Values` read: the line whose value the release ends up with.
- * From a key in a values file: its default in the chart, or the templates that read it where the cursor sits on that default or the chart sets none.
+ * From a key in a values file: the line where its value first gets set, such as its default in the chart.
+ * On that line itself, the location spans the whole line around the cursor.
+ * VS Code then opens the references in its place, as `editor.gotoLocation.alternativeDefinitionCommand` sets.
  */
 function definitions(
     state: LensState,
@@ -41,20 +43,17 @@ function definitions(
 ): vscode.Location[] {
     const fsPath = document.uri.fsPath
     const places = targetsUnderCursor(state, document, position).flatMap((target) => {
-        if (templatePrefix(fsPath, target.release) !== undefined) {
-            const place = winningPlace(target.release, target.path)
-            return place === undefined ? [] : [place]
-        }
-        const fallback = defaultPlace(target.release, target.path)
-        if (
-            fallback !== undefined &&
-            !(fallback.fsPath === fsPath && fallback.start.line === position.line)
-        )
-            return [fallback]
-        const reads = templateReadPlaces(target.release, target.path, true)
-        return reads.length > 0 ? reads : templateReadPlaces(target.release, target.path, false)
+        const place =
+            templatePrefix(fsPath, target.release) !== undefined
+                ? winningPlace(target.release, target.path)
+                : originPlace(target.release, target.path)
+        return place === undefined ? [] : [place]
     })
-    return locations(places)
+    return locations(places).map((location) =>
+        location.uri.fsPath === fsPath && location.range.start.line === position.line
+            ? new vscode.Location(location.uri, document.lineAt(position.line).range)
+            : location
+    )
 }
 
 /** Every layer that sets the path under the cursor and every template read that takes its value, for every release that reads the file. */

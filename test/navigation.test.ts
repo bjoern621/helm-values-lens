@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { beforeAll, describe, expect, it } from "vitest"
 import {
     defaultPlace,
+    originPlace,
     type Place,
     settingPlaces,
     templateReadPlaces,
@@ -72,6 +73,20 @@ describe("the chart default", () => {
 
     it("stays undefined for a path that the chart leaves out", () => {
         expect(defaultPlace(release, ["image", "pullPolicy"])).toBeUndefined()
+    })
+})
+
+describe("the place where a value first gets set", () => {
+    it("takes the chart default where one exists", () => {
+        expect(originPlace(release, ["image", "tag"])).toEqual(
+            defaultPlace(release, ["image", "tag"])
+        )
+    })
+
+    it("takes the lowest layer that sets a path without a default", () => {
+        expect(textOf(originPlace(release, ["podAnnotations", "team"]))).toBe(
+            "apps/demo.yaml: team"
+        )
     })
 })
 
