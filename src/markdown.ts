@@ -30,9 +30,6 @@ export function pathMarkdown(
     const sections = [chainMarkdown(release, path, fromFile, details.allLayers)]
     const field = schemaField(release.chart.schemas, path)
     if (field !== undefined) sections.push(...schemaMarkdown(field))
-    const key = pathKey(path)
-    for (const error of release.schemaErrors)
-        if (pathKey(error.path) === key) sections.push(`$(error) ${error.message}`)
     if (details.rendered !== undefined) {
         const holders = resourcesHolding(details.rendered, valueAt(release.trace.final, path))
         const names = holders.map((holder) => `\`${holder}\``)
