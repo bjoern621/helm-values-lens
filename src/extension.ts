@@ -2,6 +2,7 @@ import { basename } from "node:path"
 import * as vscode from "vscode"
 import { registerCodeActions } from "./editor/codeActions"
 import { registerCodeLens } from "./editor/codeLens"
+import { registerCompletion } from "./editor/completion"
 import { registerCommands } from "./editor/commands"
 import { DIAGNOSTIC_SOURCE, SETTINGS_SECTION } from "./editor/config"
 import { Diagnostics } from "./editor/diagnostics"
@@ -31,6 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
         ...registerValueViews(state),
         registerCodeActions(state),
         registerCodeLens(state),
+        registerCompletion(state),
         ...registerCommands(state, indexer, docs),
         watcher,
         watcher.onDidCreate(() => indexer.scheduleReindex(false)),

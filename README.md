@@ -31,6 +31,9 @@ A repository holding one of those needs no settings.
   The schema of a dependency checks the values under its key.
   A value that no file sets, such as a missing required key, gets its error on the map around it or on the release.
 - In the hover of a key: the description, the type and the allowed values from the schema.
+- Suggestions while you type a key in a values file or a values block: the keys that the chart defaults, reads in a template or names in its schema.
+  Each suggestion shows the description and the default of its key.
+  After `key: `, the suggestions hold the values that the schema allows, `true` and `false` for a boolean and the chart default.
 - On hover over the line that names a release, such as `metadata.name` of an Application: its chart and its values layers.
 - Above the release in its Application, Helmfile, HelmRelease or kustomization: the chart, the number of values layers, a link to the files of the chart and the state of the last render.
 - A problem marker on the release where its chart could not be loaded or `helm template` could not render it.
