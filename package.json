@@ -1,10 +1,14 @@
 {
     "name": "helm-values-lens",
     "displayName": "Helm Values Lens",
-    "description": "Shows where each Helm value gets set, which layer overrides it and the value that the chart renders with. Reads the value order from Argo CD Applications.",
+    "description": "Shows next to each line of a Helm values file the value that the release ends up with and the layer that sets it. Reads the layer order from Argo CD, Helmfile, Flux and Kustomize.",
     "version": "1.9.2",
     "publisher": "bjoern621",
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/bjoern621/helm-values-lens.git"
+    },
     "private": true,
     "engines": {
         "vscode": "^1.100.0"
