@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest"
 import { coalesce, type Layer } from "../src/coalesce"
 import {
     documentEdits,
+    keyGroups,
     removableAsDefault,
     removeKeysEdits,
     renameKeyEdit,
     similarKeys,
     type TextEdit,
+    unknownSites,
     valuesRegion
 } from "../src/quickFixes"
 import type { Release } from "../src/release"
@@ -94,6 +96,22 @@ describe("an unknown key", () => {
         expect(similarKeys(release, ["image", "tga"])).toEqual(["tag"])
         expect(similarKeys(release, ["image", "pulPolicy"])).toEqual(["pullPolicy"])
         expect(similarKeys(release, ["image", "registry"])).toEqual([])
+    })
+
+    it("stays known in a file shared with a release whose chart reads it", () => {
+        const globals = layer("globals.yaml", "global:\n  tracing: true\n  colour: blue\n")
+        const web = releaseOf([layer("values.yaml", DEFAULTS, "chart"), globals])
+        const api = releaseOf(
+            [layer("values.yaml", DEFAULTS, "chart"), globals],
+            [["global", "tracing"]]
+        )
+        const unknown = keyGroups("/globals.yaml", [web, api]).flatMap(unknownSites)
+        expect(
+            unknown.map(({ release, path }) => [release === web ? "web" : "api", path.join(".")])
+        ).toEqual([
+            ["web", "global.colour"],
+            ["api", "global.colour"]
+        ])
     })
 
     it("gets renamed in place", () => {

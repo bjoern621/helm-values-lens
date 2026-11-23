@@ -18,6 +18,7 @@ A repository holding one of those needs no settings.
 - Next to a value equal to the chart default: `= chart default`.
 - An information marker on a key that the chart does not read, such as `the chart web does not read imgae.tag`.
   Such a key changes nothing in the release and most likely carries a typo or an outdated name.
+  A file that feeds the releases of several charts, such as a shared `globals.yaml`, gets the marker on a key that none of those charts reads.
 - Next to each `.Values` read in a chart template: the final value of the release.
 - On hover over a key or a `.Values` read: every layer of each release that reads the file, lowest first, each linked to its line.
   The hover covers the one path under the cursor, in a values file, in the values block of an Application and in a template alike.

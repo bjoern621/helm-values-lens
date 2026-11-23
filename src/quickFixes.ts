@@ -37,12 +37,15 @@ export function removableGroup(group: KeyGroup): boolean {
     return group.sites.every((site) => removableAsDefault(site.release, site.layerIndex, site.path))
 }
 
-/** The user settings of a key without a default in the chart of their release and without a template that reads it. */
+/**
+ * The user settings of a key that the chart of no release reading it defaults or reads in a template.
+ * A file such as a shared `globals.yaml` feeds the releases of several charts.
+ * A key that one of those charts reads stays known to all of them.
+ * A rename or a removal would break the release whose chart reads it.
+ */
 export function unknownSites(group: KeyGroup): SettingSite[] {
-    return group.sites.filter(
-        (site) =>
-            site.layerIndex >= site.release.firstUserLayer && isUnknownKey(site.release, site.path)
-    )
+    if (group.sites.some((site) => !isUnknownKey(site.release, site.path))) return []
+    return group.sites.filter((site) => site.layerIndex >= site.release.firstUserLayer)
 }
 
 /** The layer that holds the key. Every site of a group sits in the same text. */
