@@ -55,14 +55,11 @@ function inlayHints(state: LensState, document: vscode.TextDocument): vscode.Inl
 function inlayHint(state: LensState, document: vscode.TextDocument, hint: Hint): vscode.InlayHint {
     const line = Math.min(hint.position.line, document.lineCount - 1)
     const text = document.lineAt(line).text
-    const end = Math.min(hint.position.column, text.length)
-    // VS Code paints an inlay and its padding with the hover highlight of the text that ends where the inlay sits.
-    // A blank after the read takes the inlay behind it, so that the blank stays the gap.
-    const behindBlank = /\s/.test(text.charAt(end))
-    const column = behindBlank ? end + 1 : end
+    const column = Math.min(hint.position.column, text.length)
+    // Every hint sits right after its key or read with the same padding, so that the gap matches at the end of a line and inside a template expression.
     const inlay = new vscode.InlayHint(new vscode.Position(line, column), hint.label)
-    if (behindBlank) inlay.paddingRight = column < text.length && !/\s/.test(text.charAt(column))
-    else inlay.paddingLeft = true
+    inlay.paddingLeft = true
+    inlay.paddingRight = column < text.length && !/\s/.test(text.charAt(column))
     inlay.tooltip = describe(state, hint.release, hint.path, document.uri.fsPath)
     return inlay
 }
