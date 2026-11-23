@@ -100,7 +100,7 @@ function targetHover(
         sections.push(
             `$(info) ${countOf(hidden, "other release")} read this file. Pick one in the status bar to show its values.`
         )
-    const markdown = new vscode.MarkdownString([...new Set(sections)].join("\n\n---\n\n"), true)
+    const markdown = hoverMarkdown([...new Set(sections)].join("\n\n---\n\n"))
     const line = targets[0]!.start.line
     const range = new vscode.Range(
         line,
@@ -130,7 +130,7 @@ function releaseHover(
     const sections = named.map((release) =>
         releaseMarkdown(release, fsPath, state.renderState(release.spec.id))
     )
-    const markdown = new vscode.MarkdownString(sections.join("\n\n---\n\n"), true)
+    const markdown = hoverMarkdown(sections.join("\n\n---\n\n"))
     const start = lineText.length - lineText.trimStart().length
     return new vscode.Hover(
         markdown,
@@ -144,7 +144,14 @@ function describe(
     path: ValuePath,
     fsPath: string
 ): vscode.MarkdownString {
-    return new vscode.MarkdownString(markdownOf(state, release, path, fsPath), true)
+    return hoverMarkdown(markdownOf(state, release, path, fsPath))
+}
+
+/** Markdown with theme icons and the HTML that colours the layer of the current file. */
+function hoverMarkdown(text: string): vscode.MarkdownString {
+    const markdown = new vscode.MarkdownString(text, true)
+    markdown.supportHtml = true
+    return markdown
 }
 
 function markdownOf(state: LensState, release: Release, path: ValuePath, fsPath: string): string {

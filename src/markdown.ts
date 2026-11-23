@@ -1,4 +1,4 @@
-import type { Setting } from "./coalesce"
+import type { Layer, Setting } from "./coalesce"
 import { sameValue, valueAt } from "./coalesce"
 import { fileLink, layerName, preview, releaseTitle, siteLink } from "./hints"
 import type { Release } from "./release"
@@ -74,16 +74,30 @@ export function chainMarkdown(
         const name = layerName(release, layerIndex, fromFile)
         if (setting === undefined) {
             if (!allLayers || layerIndex < chartDefaults) return
-            const link = layer.fsPath === undefined ? name : `[${name}](${fileLink(layer.fsPath)})`
+            const link = layerLink(layer, name, fileLinkOf(layer), fromFile)
             lines.push(`$(circle-small) *not set* · ${link}`)
             return
         }
-        const where = siteLink(release, layerIndex, path)
-        lines.push(
-            `${settingMark(setting, final)} · ${where === undefined ? name : `[${name}](${where})`}: \`${preview(setting.value, 60)}\``
-        )
+        const link = layerLink(layer, name, siteLink(release, layerIndex, path), fromFile)
+        lines.push(`${settingMark(setting, final)} · ${link}: \`${preview(setting.value, 60)}\``)
     })
     return lines.join("\n\n")
+}
+
+/**
+ * Links the name of a layer, in green where the layer sits in the file under the cursor.
+ * The colour sits inside the link, since VS Code paints a link in its own colour.
+ */
+function layerLink(layer: Layer, name: string, href: string | undefined, fromFile: string): string {
+    const label =
+        layer.fsPath === fromFile
+            ? `<span style="color:var(--vscode-charts-green);">${name}</span>`
+            : name
+    return href === undefined ? label : `[${label}](${href})`
+}
+
+function fileLinkOf(layer: Layer): string | undefined {
+    return layer.fsPath === undefined ? undefined : fileLink(layer.fsPath)
 }
 
 /** A codicon and a word for what became of a setting, for a Markdown string with theme icons on. */
@@ -119,8 +133,12 @@ export function releaseMarkdown(release: Release, fromFile: string, render: Rend
     ]
     release.trace.layers.forEach((layer, layerIndex) => {
         if (layerIndex < release.firstUserLayer - 1) return
-        const name = layerName(release, layerIndex, fromFile)
-        const link = layer.fsPath === undefined ? name : `[${name}](${fileLink(layer.fsPath)})`
+        const link = layerLink(
+            layer,
+            layerName(release, layerIndex, fromFile),
+            fileLinkOf(layer),
+            fromFile
+        )
         const kind = layerIndex < release.firstUserLayer ? "chart defaults" : "values"
         lines.push(`$(layers) ${kind} · ${link}`)
     })

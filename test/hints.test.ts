@@ -130,10 +130,52 @@ describe("the hints", () => {
     })
 })
 
+describe("a chart values.yaml listed again under valueFiles", () => {
+    let twice: Release
+
+    beforeAll(async () => {
+        const [spec] = findReleases([FIXTURES], undefined, fixtureCheckout)
+        const again = {
+            kind: "file" as const,
+            label: "values.yaml",
+            fsPath: CHART_VALUES,
+            raw: "values.yaml"
+        }
+        twice = await loadRelease(
+            { ...spec!, layers: [again, ...spec!.layers] },
+            join(homedir(), ".cache", "helm-values-lens"),
+            "helm"
+        )
+    })
+
+    const labelsOn = (text: string) =>
+        valueHints(CHART_VALUES, [twice])
+            .filter((hint) => hint.position.line === lineOf(CHART_VALUES, text))
+            .map((hint) => hint.label)
+
+    it("gets one hint per key, the one of its last layer", () => {
+        expect(labelsOn("replicas: 1")).toEqual(["overridden by helm.values: 3"])
+    })
+
+    it("calls no key of it equal to the chart default or set again by itself", () => {
+        const labels = valueHints(CHART_VALUES, [twice]).map((hint) => hint.label)
+        expect(labels.length).toBeGreaterThan(0)
+        expect(labels.filter((label) => /chart default|by values\.yaml/.test(label))).toEqual([])
+    })
+})
+
 describe("the hover chain", () => {
+    it("colours the layer of the file under the cursor", () => {
+        const chain = chainMarkdown(release, ["replicas"], BASE)
+        expect(chain).toContain(
+            '[<span style="color:var(--vscode-charts-green);">values-base.yaml</span>]'
+        )
+        expect(chain).toContain("[helm.values]")
+    })
+
     it("marks each setting with what became of it", () => {
         const chain = chainMarkdown(release, ["replicas"], BASE)
-        expect(chain).toContain("$(circle-slash) *overridden* · [values-base.yaml]")
+        expect(chain).toContain("$(circle-slash) *overridden* · [<span")
         expect(chain).toContain("$(verified-filled) *final* · [helm.values]")
         expect(chain).not.toContain("*not set*")
     })

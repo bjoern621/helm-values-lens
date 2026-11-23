@@ -22,6 +22,7 @@ A repository holding one of those needs no settings.
 - On hover over a key or a `.Values` read: every layer of each release that reads the file, lowest first, each linked to its line.
   The hover covers the one path under the cursor, in a values file, in the values block of an Application and in a template alike.
   A mark names what became of the layer's value: final, same as final, overridden, replaced, deleted or not set.
+  The layer in the open file shows its name in green.
 - In the same hover, after a render: the rendered resources whose text holds the value.
   A chart default with the same text matches as well.
 - A quick fix on a key equal to the chart default, which removes it or every such key of its values file or values block.

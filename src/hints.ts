@@ -99,9 +99,10 @@ function placed(
  * A user setting equal to the chart default says so.
  * A key without a default in the chart and without a template that reads it gets flagged.
  * Several releases reading one file each prefix their hints with their name.
+ * A file that feeds several layers of one release, such as the chart's `values.yaml` listed again under `valueFiles`, gets the hints of its last layer.
  */
 export function valueHints(fsPath: string, releases: readonly Release[]): Hint[] {
-    const sites = settingSites(fsPath, releases)
+    const sites = lastLayerSites(settingSites(fsPath, releases))
     const names = new Set(sites.map((site) => site.release.spec.id))
     const prefix = (release: Release) => (names.size > 1 ? `${release.spec.name}: ` : "")
     const hints: Hint[] = []
@@ -135,11 +136,35 @@ export function valueHints(fsPath: string, releases: readonly Release[]): Hint[]
         else if (setting.status === "replaced") add("replaced", `replaced by ${by}`)
         else if (layerIndex >= release.firstUserLayer) {
             if (isUnknownKey(release, path)) add("unknown", "unknown to the chart")
-            else if (!isPlainMap(setting.value) && equalsDefault(release, path, setting.value))
+            else if (
+                !isPlainMap(setting.value) &&
+                !defaultFromFile(release, path, fsPath) &&
+                equalsDefault(release, path, setting.value)
+            )
                 add("default", "= chart default")
         }
     }
     return hints
+}
+
+/** Keeps one site per release and key: the one of the highest layer. */
+function lastLayerSites(sites: readonly SettingSite[]): SettingSite[] {
+    const last = new Map<string, SettingSite>()
+    for (const site of sites) {
+        const place = `${site.release.spec.id}\0${site.key.line}:${site.key.column}`
+        const kept = last.get(place)
+        if (kept === undefined || site.layerIndex > kept.layerIndex) last.set(place, site)
+    }
+    return [...last.values()]
+}
+
+/** Whether a chart layer read from `fsPath` sets `path`, which makes a user layer of the same file equal to the default by construction. */
+function defaultFromFile(release: Release, path: ValuePath, fsPath: string): boolean {
+    return (release.trace.settings.get(pathKey(path)) ?? []).some(
+        (setting) =>
+            setting.layerIndex < release.firstUserLayer &&
+            release.trace.layers[setting.layerIndex]!.fsPath === fsPath
+    )
 }
 
 /**
