@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, sep } from "node:path"
 import * as vscode from "vscode"
 import { forgetFailedPulls, type LoadedChart } from "../chart"
 import { releaseTitle } from "../hints"
@@ -49,9 +49,17 @@ export class Indexer implements vscode.Disposable {
 
     /** Reads every release again and downloads each chart whose download failed before. */
     reload(): void {
+        this.charts.clear()
         forgetFailedPulls(join(this.cacheDir, "charts"))
         this.output.info("Reload Releases: downloads that failed before get tried again")
         this.requestReindex(true)
+    }
+
+    /** Drops each chart that holds `fsPath`, such as one whose `values.schema.json` got saved, so that the next discovery reads it again. */
+    forgetChartsHolding(fsPath: string): boolean {
+        const held = [...this.charts.keys()].filter((dir) => fsPath.startsWith(dir + sep))
+        for (const dir of held) this.charts.delete(dir)
+        return held.length > 0
     }
 
     scheduleReindex(render: boolean): void {

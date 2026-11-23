@@ -57,7 +57,8 @@ export function activate(context: vscode.ExtensionContext): void {
                 indexer.scheduleReindex(false)
         }),
         vscode.workspace.onDidSaveTextDocument((document) => {
-            if (isWatched(document)) indexer.scheduleReindex(true)
+            const chartChanged = indexer.forgetChartsHolding(document.uri.fsPath)
+            if (chartChanged || isWatched(document)) indexer.scheduleReindex(true)
         }),
         vscode.workspace.onDidChangeWorkspaceFolders(() => indexer.scheduleReindex(true)),
         vscode.workspace.onDidChangeConfiguration((event) => {
