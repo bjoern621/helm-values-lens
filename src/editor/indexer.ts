@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import * as vscode from "vscode"
-import type { LoadedChart } from "../chart"
+import { forgetFailedPulls, type LoadedChart } from "../chart"
 import { releaseTitle } from "../hints"
+import { durationSince } from "../log"
 import type { Release } from "../release"
 import { type Rendered, renderRelease } from "../render"
 import type { RenderCache } from "../renderCache"
@@ -35,7 +37,7 @@ export class Indexer implements vscode.Disposable {
 
     constructor(
         private readonly state: LensState,
-        private readonly output: vscode.OutputChannel,
+        private readonly output: vscode.LogOutputChannel,
         private readonly cacheDir: string,
         private readonly renderCache: RenderCache | undefined
     ) {}
@@ -43,6 +45,13 @@ export class Indexer implements vscode.Disposable {
     dispose(): void {
         clearTimeout(this.reindexTimer)
         clearTimeout(this.renderTimer)
+    }
+
+    /** Reads every release again and downloads each chart whose download failed before. */
+    reload(): void {
+        forgetFailedPulls(join(this.cacheDir, "charts"))
+        this.output.info("Reload Releases: downloads that failed before get tried again")
+        this.requestReindex(true)
     }
 
     scheduleReindex(render: boolean): void {
@@ -73,8 +82,12 @@ export class Indexer implements vscode.Disposable {
         const id = release.spec.id
         const title = releaseTitle(release.spec)
         const { helmPath } = readSettings()
+        const started = Date.now()
         try {
             const rendered = await renderRelease(release, helmPath)
+            this.output.debug(
+                `${title}: rendered ${countOf(rendered.resources.size, "resource")} in ${durationSince(started)}`
+            )
             this.renderCache?.put(release, helmPath, rendered)
             const first = this.state.rendered(id) === undefined
             this.store(release, rendered)
@@ -85,6 +98,7 @@ export class Indexer implements vscode.Disposable {
                 )
         } catch (error) {
             this.state.storeRenderError(id, (error as Error).message)
+            this.output.warn(`${title}: helm template failed: ${firstLine(error)}`)
             if (announce)
                 void vscode.window.showErrorMessage(`helm template ${title}: ${firstLine(error)}`)
         }
@@ -97,6 +111,11 @@ export class Indexer implements vscode.Disposable {
         const folders = roots()
         const settings = readSettings()
         const current = () => generation === this.generation
+        const started = Date.now()
+        // Typing reads the releases on each pause, which would fill the log at the info level.
+        const note = (message: string) =>
+            render ? this.output.info(message) : this.output.debug(message)
+        note(`Reading the releases of ${countOf(folders.length, "folder")}`)
         this.state.setProgress("reading", { done: 0, total: 0 })
         try {
             const discovery = await discover(folders, this.cacheDir, settings.helmPath, {
@@ -107,11 +126,15 @@ export class Indexer implements vscode.Disposable {
                 // Rendering each chart that renders Applications on every keystroke would keep helm busy, so typing reuses the renders of the last save.
                 renders: render ? undefined : this.renderedSoFar(),
                 cache: this.renderCache,
+                log: this.output,
                 onProgress: (done, total) => {
                     if (current()) this.state.setProgress("reading", { done, total })
                 }
             })
             if (!current()) return
+            note(
+                `Read ${countOf(discovery.releases.length + discovery.failures.length, "release")} in ${durationSince(started)}`
+            )
             this.state.replace(discovery)
             for (const [id, rendered] of discovery.rendered) {
                 const release = this.state.byId(id)
@@ -125,7 +148,7 @@ export class Indexer implements vscode.Disposable {
             this.state.notify()
             if (render && settings.renderOnSave) this.scheduleRender()
         } catch (error) {
-            if (current()) this.output.appendLine(`Could not read the releases: ${String(error)}`)
+            if (current()) this.output.error(`Could not read the releases: ${String(error)}`)
         } finally {
             if (current()) this.state.setProgress("reading", undefined)
         }
@@ -153,6 +176,7 @@ export class Indexer implements vscode.Disposable {
         const skipped = this.freshRenders
         this.freshRenders = new Set()
         const { helmPath } = readSettings()
+        const started = Date.now()
         const releases: Release[] = []
         for (const release of this.state.releases) {
             if (skipped.has(release.spec.id)) continue
@@ -161,6 +185,10 @@ export class Indexer implements vscode.Disposable {
             else this.store(release, kept)
         }
         this.state.notify()
+        const fromDisk = this.state.releases.length - skipped.size - releases.length
+        this.output.info(
+            `Rendering ${countOf(releases.length, "release")} with helm. ${countOf(fromDisk, "render")} came from disk.`
+        )
         const progress = { done: 0, total: releases.length }
         this.state.setProgress("rendering", progress)
         await inBatches(releases, async (release) => {
@@ -169,6 +197,9 @@ export class Indexer implements vscode.Disposable {
             this.state.setProgress("rendering", progress)
         })
         this.state.setProgress("rendering", undefined)
+        this.output.info(
+            `Rendered in ${durationSince(started)}, ${countOf(this.state.renderErrorCount, "release")} could not render`
+        )
         this.renderCache?.prune(this.state.releases.map((release) => release.spec.id))
     }
 
@@ -191,16 +222,16 @@ export class Indexer implements vscode.Disposable {
     /** Writes the releases that did not load to the output channel, once per change of the result. */
     private logSummary(root: string): void {
         const { releases, failures } = this.state
-        const lines = [
-            `${releases.length} releases loaded, ${failures.length} not loaded, ${this.state.renderErrorCount} could not render`,
-            ...failures.map(
-                ({ spec, reason }) => `  ${releaseTitle(spec)} (${where(spec, root)}): ${reason}`
-            )
-        ]
-        const summary = lines.join("\n")
+        const head = `${releases.length} releases loaded, ${failures.length} not loaded`
+        const lines = failures.map(
+            ({ spec, reason }) =>
+                `Not loaded: ${releaseTitle(spec)} (${where(spec, root)}): ${reason}`
+        )
+        const summary = [head, ...lines].join("\n")
         if (summary === this.lastSummary) return
         this.lastSummary = summary
-        this.output.appendLine(summary)
+        this.output.info(head)
+        for (const line of lines) this.output.warn(line)
     }
 }
 

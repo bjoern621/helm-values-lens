@@ -40,7 +40,7 @@ export function registerCommands(
             "render",
             withRelease((release) => indexer.render(release, true))
         ),
-        command("refresh", () => indexer.requestReindex(true)),
+        command("refresh", () => indexer.reload()),
         command("openChartFile", withRelease(openChartFile)),
         command("selectRelease", () => selectRelease(state)),
         command("addRelease", () => addRelease(state))

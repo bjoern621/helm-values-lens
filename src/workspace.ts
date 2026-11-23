@@ -14,6 +14,7 @@ import type { LoadedChart } from "./chart"
 import { placeReleases } from "./hints"
 import { buildRelease, type ReadText, readFromDisk, type Release } from "./release"
 import { firstLine } from "./text"
+import { type Log, SILENT, durationSince } from "./log"
 import type { Rendered } from "./render"
 import { cachedRender, type RenderCache } from "./renderCache"
 import { readApplicationSets } from "./sources/applicationSet"
@@ -76,6 +77,8 @@ export interface DiscoveryOptions {
     configured?: readonly ConfiguredRelease[]
     /** Readers besides the built-in ones. */
     readers?: readonly SourceReader[]
+    /** Takes the charts read and pulled and the renders run while discovering. */
+    log?: Log
 }
 
 /** Walks the workspace once and lists its YAML files, charts and Git checkouts. */
@@ -400,12 +403,13 @@ export async function loadRelease(
     helmPath: string,
     readText: ReadText = readFromDisk,
     charts: Map<string, LoadedChart> = new Map(),
-    workspaceCharts: readonly WorkspaceChart[] = []
+    workspaceCharts: readonly WorkspaceChart[] = [],
+    log: Log = SILENT
 ): Promise<Release> {
     let dir: string
     let fallback: string | undefined
     try {
-        dir = await chartDir(spec.chart, join(cacheDir, "charts"), helmPath)
+        dir = await chartDir(spec.chart, join(cacheDir, "charts"), helmPath, log)
     } catch (error) {
         const ref = spec.chart
         if (ref.kind !== "repository") throw error
@@ -416,8 +420,12 @@ export async function loadRelease(
     }
     let chart = charts.get(dir)
     if (chart === undefined) {
+        const started = Date.now()
         chart = loadChart(dir, cacheDir)
         charts.set(dir, chart)
+        log.debug(
+            `Read the chart ${chart.name} ${chart.version} from ${dir} in ${durationSince(started)}`
+        )
     }
     const release = buildRelease(spec, chart, readText)
     if (fallback !== undefined) release.problems.unshift(fallback)
@@ -475,7 +483,15 @@ export async function discover(
     const visit = async (spec: ReleaseSpec, depth: number): Promise<ReleaseSpec[]> => {
         let release: Release
         try {
-            release = await loadRelease(spec, cacheDir, helmPath, readText, charts, index.charts)
+            release = await loadRelease(
+                spec,
+                cacheDir,
+                helmPath,
+                readText,
+                charts,
+                index.charts,
+                options.log
+            )
         } catch (error) {
             discovery.failures.push({ spec, reason: firstLine(error) })
             return []
@@ -487,7 +503,7 @@ export async function discover(
         if (rendersApps.get(dir) !== true) return []
         let rendered = options.renders?.get(spec.id)
         try {
-            rendered ??= await cachedRender(release, helmPath, options.cache)
+            rendered ??= await cachedRender(release, helmPath, options.cache, options.log)
         } catch (error) {
             discovery.renderErrors.set(spec.id, (error as Error).message)
             return []

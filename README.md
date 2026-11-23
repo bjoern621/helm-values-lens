@@ -52,6 +52,11 @@ Every other release takes its render from disk.
 Hints update while you type.
 The status bar names the resources that a save changed.
 While the extension reads or renders, the status bar counts the releases done, such as `Reading releases 12/40`.
+The output channel `Helm Values Lens` logs each step with its time: the releases read, each chart download and the renders, with how long each took.
+To see each chart read and each render as well, run `Developer: Set Log Level` and pick `Debug` for `Helm Values Lens`.
+
+A chart download that failed, such as one from a registry out of reach, fails again without a new try for an hour, across restarts of VS Code.
+To try every failed download again, run `Reload Releases`.
 
 One values file often feeds several releases, such as one chart deployed to staging and production.
 The status bar names the release whose values the hints show, with the number of releases that read the file.
@@ -73,7 +78,7 @@ The commands, under `Helm Values Lens:` in the command palette:
 | `Open Chart File`                           | Opens a template or values file of the chart, from the chart cache where it lives outside the workspace. |
 | `Select Release for Hints`                  | Lets you pick the release whose values the hints show.                                                   |
 | `Add Release from a Chart and Values Files` | Adds a release to the `helmValuesLens.releases` setting.                                                 |
-| `Reload Releases`                           | Reads every release and chart again.                                                                     |
+| `Reload Releases`                           | Reads every release and chart again and downloads each chart whose download failed.                      |
 
 The trace of a release lists each value with the layers that set it.
 To print the trace of each release without VS Code, run `npm run trace -- <folder> [release]`.

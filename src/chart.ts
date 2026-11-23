@@ -6,13 +6,15 @@ import {
     readFileSync,
     renameSync,
     rmSync,
-    statSync
+    statSync,
+    writeFileSync
 } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { promisify } from "node:util"
 import { parse } from "yaml"
 import type { ChartRef } from "./argo"
 import type { Layer } from "./coalesce"
+import { clock, type Log, SILENT, durationSince } from "./log"
 import { type ChartSchema, readSchema } from "./schema"
 import { type KeySite, parseValues, pathKey } from "./yamlPaths"
 
@@ -45,38 +47,113 @@ export interface LoadedChart {
 /** How long a download may take before it counts as failed. An unreachable registry otherwise holds discovery for minutes. */
 const PULL_TIMEOUT_MS = 45_000
 
-/** How long a failed download stays failed before the next attempt. */
-const PULL_RETRY_DELAY_MS = 10 * 60_000
+/**
+ * How long a failed download stays failed before the next attempt, across restarts of VS Code.
+ * A registry out of reach, such as one behind a VPN, would otherwise hold every start for `PULL_TIMEOUT_MS`.
+ */
+const PULL_RETRY_DELAY_MS = 60 * 60_000
 
 const pulls = new Map<string, Promise<string>>()
-const failedPulls = new Map<string, { at: number; error: Error }>()
+interface FailedPull {
+    at: number
+    message: string
+}
+
+/** The failed downloads by target folder, read from and written to a file in their cache folder. */
+const failedPulls = new Map<string, FailedPull>()
+/** The cache folders whose file of failed downloads got read. */
+const failuresRead = new Set<string>()
 
 /**
  * Returns the folder of a chart, pulling a chart from a Helm repository into `cacheDir` once per version.
  * An OCI registry takes a `repoURL` without a scheme, as Argo CD writes it, or with `oci://`.
- * Releases that ask for one chart at once share one download. A failed download fails again without a retry for a while.
+ * Releases that ask for one chart at once share one download.
+ * A failed download fails again without a retry for `PULL_RETRY_DELAY_MS`, or until `forgetFailedPulls`.
  */
-export async function chartDir(ref: ChartRef, cacheDir: string, helmPath: string): Promise<string> {
+export async function chartDir(
+    ref: ChartRef,
+    cacheDir: string,
+    helmPath: string,
+    log: Log = SILENT
+): Promise<string> {
     if (ref.kind === "directory") return ref.dir
     if (ref.kind === "unresolved") throw new Error(ref.reason)
     const target = join(cacheDir, safeName(`${ref.repoURL}_${ref.chart}_${ref.version}`))
     const chartFolder = join(target, ref.chart)
     if (existsSync(join(chartFolder, "Chart.yaml"))) return chartFolder
+    readFailures(cacheDir)
     const failed = failedPulls.get(target)
-    if (failed !== undefined && Date.now() - failed.at < PULL_RETRY_DELAY_MS) throw failed.error
+    if (failed !== undefined && Date.now() - failed.at < PULL_RETRY_DELAY_MS)
+        throw new Error(
+            `${failed.message}. Last try at ${clock(failed.at)}. Reload Releases tries again.`
+        )
     let pull = pulls.get(target)
     if (pull === undefined) {
-        pull = pullChart(ref, target, helmPath).finally(() => pulls.delete(target))
+        pull = loggedPull(ref, target, helmPath, log).finally(() => pulls.delete(target))
         pulls.set(target, pull)
     }
+    await pull
+    return chartFolder
+}
+
+/** Pulls a chart, writing the start, the duration and a failure to `log` and keeping a failure on disk. */
+async function loggedPull(
+    ref: { repoURL: string; chart: string; version: string },
+    target: string,
+    helmPath: string,
+    log: Log
+): Promise<string> {
+    const cacheDir = dirname(target)
+    const name = `${ref.chart} ${ref.version}`
+    const started = Date.now()
+    log.info(`Pulling ${name} from ${ref.repoURL}`)
     try {
-        await pull
+        const dir = await pullChart(ref, target, helmPath)
+        log.info(`Pulled ${name} in ${durationSince(started)}`)
+        if (failedPulls.delete(target)) writeFailures(cacheDir)
+        return dir
     } catch (error) {
-        failedPulls.set(target, { at: Date.now(), error: error as Error })
+        const { message } = error as Error
+        failedPulls.set(target, { at: Date.now(), message })
+        writeFailures(cacheDir)
+        log.warn(
+            `${message} (after ${durationSince(started)}). The next try waits until ${clock(Date.now() + PULL_RETRY_DELAY_MS)} or Reload Releases.`
+        )
         throw error
     }
-    failedPulls.delete(target)
-    return chartFolder
+}
+
+/** Lets the next `chartDir` for each chart in `cacheDir` download it again, failed before or not. */
+export function forgetFailedPulls(cacheDir: string): void {
+    for (const target of [...failedPulls.keys()])
+        if (dirname(target) === cacheDir) failedPulls.delete(target)
+    rmSync(failuresFile(cacheDir), { force: true })
+}
+
+function failuresFile(cacheDir: string): string {
+    return join(cacheDir, "failed-pulls.json")
+}
+
+function readFailures(cacheDir: string): void {
+    if (failuresRead.has(cacheDir)) return
+    failuresRead.add(cacheDir)
+    let saved: Record<string, FailedPull>
+    try {
+        saved = JSON.parse(readFileSync(failuresFile(cacheDir), "utf8")) as Record<
+            string,
+            FailedPull
+        >
+    } catch {
+        return
+    }
+    for (const [target, failure] of Object.entries(saved))
+        if (!failedPulls.has(target)) failedPulls.set(target, failure)
+}
+
+function writeFailures(cacheDir: string): void {
+    const own = [...failedPulls].filter(([target]) => dirname(target) === cacheDir)
+    mkdirSync(cacheDir, { recursive: true })
+    writeFileSync(failuresFile(cacheDir), JSON.stringify(Object.fromEntries(own)))
 }
 
 async function pullChart(

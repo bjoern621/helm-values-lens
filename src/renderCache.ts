@@ -11,6 +11,8 @@ import {
 } from "node:fs"
 import { join } from "node:path"
 import { stringify } from "yaml"
+import { releaseTitle } from "./hints"
+import { type Log, SILENT, durationSince } from "./log"
 import type { Release } from "./release"
 import { type Rendered, renderRelease, resourcesOf } from "./render"
 
@@ -79,11 +81,20 @@ export class RenderCache {
 export async function cachedRender(
     release: Release,
     helmPath: string,
-    cache: RenderCache | undefined
+    cache: RenderCache | undefined,
+    log: Log = SILENT
 ): Promise<Rendered> {
+    const title = releaseTitle(release.spec)
     const kept = cache?.get(release, helmPath)
-    if (kept !== undefined) return kept
+    if (kept !== undefined) {
+        log.debug(`${title}: took the render from disk`)
+        return kept
+    }
+    const started = Date.now()
     const rendered = await renderRelease(release, helmPath)
+    log.debug(
+        `${title}: rendered ${rendered.resources.size} resources in ${durationSince(started)}`
+    )
     cache?.put(release, helmPath, rendered)
     return rendered
 }

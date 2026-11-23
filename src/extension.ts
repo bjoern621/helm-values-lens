@@ -18,7 +18,7 @@ import { RELEASE_FILE } from "./workspace"
 const WATCHED_FILES = "**/{*.yaml,*.yml,*.gotmpl,*.tpl,Kustomization}"
 
 export function activate(context: vscode.ExtensionContext): void {
-    const output = vscode.window.createOutputChannel(DIAGNOSTIC_SOURCE)
+    const output = vscode.window.createOutputChannel(DIAGNOSTIC_SOURCE, { log: true })
     const state = new LensState(context.workspaceState)
     const renderCache =
         context.storageUri === undefined
