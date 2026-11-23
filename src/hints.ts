@@ -32,7 +32,7 @@ export interface SettingSite {
     valueEnd: Position | undefined
 }
 
-/** A key or a `.Values` read under the cursor, with the span of its line that it covers. */
+/** A key or a `.Values` read under the cursor, with the span of its line that names it: the key alone, or the whole `.Values` path. */
 export interface Target {
     release: Release
     path: ValuePath
@@ -163,6 +163,7 @@ export function templateHints(
 /**
  * Finds what the cursor at `position` points at on `lineText`: a key that a layer sets, or a `.Values` read of a template.
  * The order of `releases` carries over to the targets.
+ * A key covers its value as well, so that the cursor over the value finds it.
  * A `.Values` read inside the value of a key wins over the key, so that the cursor names one path.
  */
 export function targetsAt(
@@ -171,26 +172,37 @@ export function targetsAt(
     position: Position,
     releases: readonly Release[]
 ): Target[] {
-    const covers = (start: Position, end: Position) =>
-        position.column >= start.column && position.column <= end.column
-    const targets: Target[] = []
+    const found: { target: Target; width: number }[] = []
+    const add = (target: Target, coverEnd: Position) => {
+        if (position.column >= target.start.column && position.column <= coverEnd.column)
+            found.push({ target, width: coverEnd.column - target.start.column })
+    }
     for (const release of releases) {
         for (const site of settingSites(fsPath, [release])) {
             if (site.key.line !== position.line) continue
+            const valueEnd = Math.min(siteEnd(site).column, lineText.length)
             const end = {
                 line: position.line,
-                column: Math.min(siteEnd(site).column, lineText.length)
+                column: keyEnd(lineText, site.key.column) ?? valueEnd
             }
-            if (covers(site.key, end))
-                targets.push({ release, path: site.path, start: site.key, end })
+            add(
+                { release, path: site.path, start: site.key, end },
+                { line: position.line, column: valueEnd }
+            )
         }
         for (const hint of templateHints(fsPath, lineText, [release], position.line))
-            if (covers(hint.start, hint.position))
-                targets.push({ release, path: hint.path, start: hint.start, end: hint.position })
+            add({ release, path: hint.path, start: hint.start, end: hint.position }, hint.position)
     }
-    const width = (target: Target) => target.end.column - target.start.column
-    const narrowest = Math.min(...targets.map(width))
-    return targets.filter((target) => width(target) === narrowest)
+    const narrowest = Math.min(...found.map((entry) => entry.width))
+    return found.filter((entry) => entry.width === narrowest).map((entry) => entry.target)
+}
+
+/** Where the YAML key that starts at `column` ends, before its colon, or undefined where no colon follows it. */
+function keyEnd(lineText: string, column: number): number | undefined {
+    const key = /^(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^\s:][^:]*?)(?=\s*:(?:\s|$))/.exec(
+        lineText.slice(column)
+    )
+    return key === null ? undefined : column + key[0].length
 }
 
 /** The key that the values of the chart holding `fsPath` sit under, or undefined for a file outside the templates of the release. */

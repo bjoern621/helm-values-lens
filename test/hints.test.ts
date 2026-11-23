@@ -176,6 +176,13 @@ describe("the target under the cursor", () => {
         expect(targetAt(BASE, line, "replicas: 2".length)).toEqual(["replicas"])
     })
 
+    it("highlights the name of a key alone, so that a hint after its value stays apart", () => {
+        const line = lineOf(BASE, "replicas: 2")
+        const lineText = readFileSync(BASE, "utf8").split("\n")[line]!
+        const [target] = targetsAt(BASE, lineText, { line, column: lineText.length }, [release])
+        expect(lineText.slice(target!.start.column, target!.end.column)).toBe("replicas")
+    })
+
     it("takes a key of the inline block of an Application", () => {
         const line = lineOf(APP, "replicas: 3")
         const text = readFileSync(APP, "utf8").split("\n")[line]!
