@@ -127,7 +127,7 @@ function settingMark(setting: Setting, final: unknown): string {
         case "overridden":
             return sameValue(final, setting.value)
                 ? "$(pass) *same as final*"
-                : "$(circle-slash) *overridden*"
+                : "$(circle-large-outline) *overridden*"
         case "replaced":
             return "$(replace) *replaced*"
         case "deleted":

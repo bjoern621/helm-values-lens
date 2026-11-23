@@ -184,7 +184,7 @@ describe("the hover chain", () => {
 
     it("marks each setting with what became of it", () => {
         const chain = chainMarkdown(release, ["replicas"], BASE)
-        expect(chain).toContain("$(circle-slash) *overridden* · <span")
+        expect(chain).toContain("$(circle-large-outline) *overridden* · <span")
         expect(chain).toContain("$(verified-filled) *final* · [helm.values]")
         expect(chain).not.toContain("*not set*")
     })
