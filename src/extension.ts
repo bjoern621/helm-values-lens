@@ -11,6 +11,7 @@ import { LensState } from "./editor/state"
 import { StatusBar } from "./editor/statusBar"
 import { registerValueViews } from "./editor/valueViews"
 import { VirtualDocs } from "./editor/virtualDocs"
+import { WorkingFile } from "./editor/workingFile"
 import { RenderCache } from "./renderCache"
 import { RELEASE_FILE } from "./workspace"
 
@@ -29,19 +30,21 @@ export function activate(context: vscode.ExtensionContext): void {
               )
     const indexer = new Indexer(state, output, context.globalStorageUri.fsPath, renderCache)
     const docs = new VirtualDocs(state)
+    const workingFile = new WorkingFile()
     const watcher = vscode.workspace.createFileSystemWatcher(WATCHED_FILES)
     context.subscriptions.push(
         output,
         state,
         indexer,
         docs,
-        new StatusBar(state),
+        workingFile,
+        new StatusBar(state, workingFile),
         new Diagnostics(state),
         ...registerValueViews(state),
         registerCodeActions(state),
         registerCodeLens(state),
         registerCompletion(state),
-        ...registerCommands(state, indexer, docs),
+        ...registerCommands(state, indexer, docs, workingFile),
         watcher,
         watcher.onDidCreate(() => indexer.scheduleReindex(false)),
         watcher.onDidDelete(() => indexer.scheduleReindex(false)),

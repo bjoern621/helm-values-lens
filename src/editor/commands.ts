@@ -8,17 +8,20 @@ import { firstRoot, roots, where } from "./folders"
 import type { Indexer } from "./indexer"
 import type { LensState } from "./state"
 import type { VirtualDocs } from "./virtualDocs"
+import type { WorkingFile } from "./workingFile"
 
 /** Registers the commands of the palette, the CodeLens and the status bar. */
 export function registerCommands(
     state: LensState,
     indexer: Indexer,
-    docs: VirtualDocs
+    docs: VirtualDocs,
+    workingFile: WorkingFile
 ): vscode.Disposable[] {
     const withRelease =
         (work: (release: Release) => Promise<void>) =>
         async (id?: string): Promise<void> => {
-            const release = id === undefined ? await pickRelease(state) : state.byId(id)
+            const release =
+                id === undefined ? await pickRelease(state, workingFile) : state.byId(id)
             if (release !== undefined) await work(release)
         }
     const command = (name: string, run: (...args: never[]) => unknown) =>
@@ -42,7 +45,7 @@ export function registerCommands(
         ),
         command("refresh", () => indexer.reload()),
         command("openChartFile", withRelease(openChartFile)),
-        command("selectRelease", () => selectRelease(state)),
+        command("selectRelease", () => selectRelease(state, workingFile)),
         command("addRelease", () => addRelease(state))
     ]
 }
@@ -59,14 +62,17 @@ function releaseItem(release: Release, root: string): ReleaseItem {
     }
 }
 
-function activeCandidates(state: LensState): Release[] {
-    const document = vscode.window.activeTextEditor?.document
-    return document === undefined ? [] : state.candidates(document.uri.fsPath)
+function activeCandidates(state: LensState, workingFile: WorkingFile): Release[] {
+    const file = workingFile.fsPath
+    return file === undefined ? [] : state.candidates(file)
 }
 
 /** Lets the user pick a release, the releases of the active file first. */
-async function pickRelease(state: LensState): Promise<Release | undefined> {
-    const first = new Set(activeCandidates(state))
+async function pickRelease(
+    state: LensState,
+    workingFile: WorkingFile
+): Promise<Release | undefined> {
+    const first = new Set(activeCandidates(state, workingFile))
     const releases = [...state.releases].sort((a, b) => Number(first.has(b)) - Number(first.has(a)))
     const root = firstRoot()
     const picked = await vscode.window.showQuickPick(
@@ -77,8 +83,8 @@ async function pickRelease(state: LensState): Promise<Release | undefined> {
 }
 
 /** Lets the user pick the release whose values the hints show, or every release of the file. */
-async function selectRelease(state: LensState): Promise<void> {
-    const candidates = activeCandidates(state)
+async function selectRelease(state: LensState, workingFile: WorkingFile): Promise<void> {
+    const candidates = activeCandidates(state, workingFile)
     const releases = candidates.length > 0 ? candidates : state.releases
     const root = firstRoot()
     const all: ReleaseItem = {

@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import { releaseTitle } from "../hints"
 import type { LensState, Progress } from "./state"
+import type { WorkingFile } from "./workingFile"
 
 /**
  * Names the release that the hints of the active file follow, and how far reading or rendering the releases got.
@@ -10,13 +11,16 @@ export class StatusBar implements vscode.Disposable {
     private readonly item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50)
     private readonly disposables: vscode.Disposable[]
 
-    constructor(private readonly state: LensState) {
+    constructor(
+        private readonly state: LensState,
+        private readonly workingFile: WorkingFile
+    ) {
         this.item.command = "helmValuesLens.selectRelease"
         this.disposables = [
             this.item,
             state.onDidChange(() => this.update()),
             state.onDidChangeProgress(() => this.update()),
-            vscode.window.onDidChangeActiveTextEditor(() => this.update())
+            workingFile.onDidChange(() => this.update())
         ]
     }
 
@@ -25,8 +29,8 @@ export class StatusBar implements vscode.Disposable {
     }
 
     private update(): void {
-        const document = vscode.window.activeTextEditor?.document
-        const candidates = document === undefined ? [] : this.state.candidates(document.uri.fsPath)
+        const file = this.workingFile.fsPath
+        const candidates = file === undefined ? [] : this.state.candidates(file)
         const progress = this.state.progress
         if (candidates.length === 0 && progress === undefined) {
             this.item.hide()
