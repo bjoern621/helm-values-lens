@@ -95,7 +95,7 @@ export class Diagnostics implements vscode.Disposable {
                     add(
                         fsPath,
                         span,
-                        `${releaseTitle(release.spec)}: the chart ${release.chart.name} has no default for ${dottedPath(path)} and no template that reads it`,
+                        `${releaseTitle(release.spec)}: the chart ${release.chart.name} does not read ${dottedPath(path)}`,
                         Information
                     )
                 if (groupLayer(group).kind !== "parameters" && removableGroup(group))
