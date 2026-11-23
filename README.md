@@ -6,8 +6,8 @@ Each of these files adds a layer of values.
 The last layer wins.
 The hint names that layer and its value.
 
-The extension reads which files feed a release, and in which order, from the file that deploys the chart: an Argo CD Application or ApplicationSet, a `helmfile.yaml`, a Flux HelmRelease or a `kustomization.yaml` with `helmCharts`.
-A repository holding one of those needs no settings.
+The extension reads which files feed a release, and in which order, from the files of the tool that deploys the chart: Argo CD, Helmfile, Flux or Kustomize.
+A repository that deploys with one of them needs no settings.
 
 ![A values file with the hints of the release picked in the status bar and the hover listing every release that reads the file](docs/values-file.png)
 
