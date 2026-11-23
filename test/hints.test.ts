@@ -140,7 +140,7 @@ describe("the hover chain", () => {
 
     it("lists the layers that leave the path alone once asked to", () => {
         const chain = chainMarkdown(release, ["replicas"], BASE, true)
-        expect(chain).toContain("$(circle-small-filled) *not set* · [envs/prod.yaml]")
+        expect(chain).toContain("$(circle-small) *not set* · [envs/prod.yaml]")
     })
 })
 

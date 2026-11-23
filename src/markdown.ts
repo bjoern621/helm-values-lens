@@ -75,7 +75,7 @@ export function chainMarkdown(
         if (setting === undefined) {
             if (!allLayers || layerIndex < chartDefaults) return
             const link = layer.fsPath === undefined ? name : `[${name}](${fileLink(layer.fsPath)})`
-            lines.push(`$(circle-small-filled) *not set* · ${link}`)
+            lines.push(`$(circle-small) *not set* · ${link}`)
             return
         }
         const where = siteLink(release, layerIndex, path)
@@ -93,7 +93,7 @@ function settingMark(setting: Setting, final: unknown): string {
             return "$(verified-filled) *final*"
         case "overridden":
             return sameValue(final, setting.value)
-                ? "$(pass-filled) *same as final*"
+                ? "$(pass) *same as final*"
                 : "$(circle-slash) *overridden*"
         case "replaced":
             return "$(replace) *replaced*"
