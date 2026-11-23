@@ -108,7 +108,8 @@ export type RenderState =
 
 /**
  * Describes a release as Markdown for the hover of the line that names it.
- * The text names the chart, each values layer from the lowest up with a link, the problems and the render.
+ * The text names the chart, each values layer from the lowest up with a link and the resources of the last render.
+ * The problems of the release stay out, since VS Code shows their diagnostics on the same line above the hover.
  */
 export function releaseMarkdown(release: Release, fromFile: string, render: RenderState): string {
     const { chart } = release
@@ -123,10 +124,7 @@ export function releaseMarkdown(release: Release, fromFile: string, render: Rend
         const kind = layerIndex < release.firstUserLayer ? "chart defaults" : "values"
         lines.push(`$(layers) ${kind} · ${link}`)
     })
-    for (const problem of release.problems) lines.push(`$(warning) ${problem}`)
     if (render.kind === "rendered")
         lines.push(`$(file-code) Rendered ${countOf(render.rendered.resources.size, "resource")}`)
-    else if (render.kind === "failed")
-        lines.push(`$(error) helm template could not render the chart`)
     return lines.join("\n\n")
 }
