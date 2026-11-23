@@ -21,18 +21,17 @@ function codeLenses(state: LensState, document: vscode.TextDocument): vscode.Cod
     return here.flatMap((release) => {
         const line = Math.min(release.spec.appLine, document.lineCount - 1)
         const range = new vscode.Range(line, 0, line, 0)
-        const userLayers = release.trace.layers.length - release.firstUserLayer
         const id = release.spec.id
         const name =
             (perLine.get(release.spec.appLine) ?? 0) > 1 ? `${releaseTitle(release.spec)}: ` : ""
         return [
             new vscode.CodeLens(range, {
-                title: `${name}Final values: ${countOf(userLayers, "layer")} over ${release.chart.name}`,
+                title: `${name}Final values: ${countOf(release.trace.layers.length, "layer")}`,
                 command: "helmValuesLens.showFinalValues",
                 arguments: [id]
             }),
             new vscode.CodeLens(range, {
-                title: "Chart files",
+                title: `Chart ${release.chart.name}`,
                 command: "helmValuesLens.openChartFile",
                 arguments: [id]
             }),
