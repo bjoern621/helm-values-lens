@@ -74,17 +74,42 @@ function hover(
     position: vscode.Position
 ): vscode.Hover | undefined {
     const fsPath = document.uri.fsPath
-    const lineText = document.lineAt(position.line).text
-    const at = { line: position.line, column: position.character }
     const releases = state.fileReleases(fsPath)
-    const all = targetsAt(fsPath, lineText, at, [...releases.shown, ...releases.others])
+    const targets = targetsUnderCursor(state, document, position)
+    if (targets.length > 0) return targetHover(state, fsPath, targets, releases)
+    const lineText = document.lineAt(position.line).text
+    return releaseHover(state, fsPath, lineText, position.line, releases)
+}
+
+/**
+ * Finds the key or the `.Values` read under the cursor, for each release that reads the file.
+ * The releases picked in the status bar go first. The others count where none of those covers the place.
+ */
+export function targetsUnderCursor(
+    state: LensState,
+    document: vscode.TextDocument,
+    position: vscode.Position
+): Target[] {
+    const releases = state.fileReleases(document.uri.fsPath)
+    const all = everyTargetUnderCursor(state, document, position)
     const shown = (target: Target) => releases.shown.includes(target.release)
-    const targets = covering(
+    return covering(
         all.filter(shown),
         all.filter((target) => !shown(target))
     )
-    if (targets.length > 0) return targetHover(state, fsPath, targets, releases)
-    return releaseHover(state, fsPath, lineText, position.line, releases)
+}
+
+/** Finds the key or the `.Values` read under the cursor for every release that reads the file, whichever the status bar picks. */
+export function everyTargetUnderCursor(
+    state: LensState,
+    document: vscode.TextDocument,
+    position: vscode.Position
+): Target[] {
+    const fsPath = document.uri.fsPath
+    const lineText = document.lineAt(position.line).text
+    const at = { line: position.line, column: position.character }
+    const releases = state.fileReleases(fsPath)
+    return targetsAt(fsPath, lineText, at, [...releases.shown, ...releases.others])
 }
 
 function targetHover(

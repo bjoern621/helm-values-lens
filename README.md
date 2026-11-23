@@ -44,6 +44,14 @@ A repository that deploys with one of them needs no settings.
 - On hover over the line that names a release, such as `metadata.name` of an Application: its chart and its values layers.
 - Above the release in its Application, Helmfile, HelmRelease or kustomization: the chart, the number of values layers, a link to the files of the chart and the state of the last render.
 - A problem marker on the release where its chart could not be loaded or `helm template` could not render it.
+- Go to Definition (`F12`) on a `.Values` read in a template: the line whose value the release picked in the status bar ends up with.
+  With all releases picked, a list holds that line for each release.
+- Go to Definition on a key in a values file: the default of the key in the chart's `values.yaml`.
+  On the default itself, or for a key without one, the template lines that read the key.
+- Find All References (`Shift+F12`) on a key or a `.Values` read: every layer of each release that sets it and every template line that reads it.
+  A template that reads a map around the key, such as `toYaml .Values.resources`, counts as well.
+- A link on each values file that an Application, a Helmfile release, a HelmRelease or a kustomization names, such as `$values/envs/prod.yaml`.
+  `Ctrl+click` opens the file.
 
 ![A chart template that renders an Argo CD Application, with the final value after each .Values read and a summary of each release above metadata.name](docs/template.png)
 

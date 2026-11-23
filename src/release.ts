@@ -158,7 +158,8 @@ function templateReads(chart: LoadedChart): Set<string> {
     return paths
 }
 
-function templateFiles(dir: string): string[] {
+/** Lists the YAML, `.tpl`, `.txt` and JSON files under `dir`, in every folder below it. */
+export function templateFiles(dir: string): string[] {
     if (!existsSync(dir)) return []
     return readdirSync(dir).flatMap((name) => {
         const path = join(dir, name)
