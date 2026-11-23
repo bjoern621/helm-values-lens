@@ -134,13 +134,13 @@ describe("the hover chain", () => {
     it("marks each setting with what became of it", () => {
         const chain = chainMarkdown(release, ["replicas"], BASE)
         expect(chain).toContain("$(circle-slash) *overridden* · [values-base.yaml]")
-        expect(chain).toContain("$(pass-filled) *final* · [helm.values]")
+        expect(chain).toContain("$(verified-filled) *final* · [helm.values]")
         expect(chain).not.toContain("*not set*")
     })
 
     it("lists the layers that leave the path alone once asked to", () => {
         const chain = chainMarkdown(release, ["replicas"], BASE, true)
-        expect(chain).toContain("$(circle-large-outline) *not set* · [envs/prod.yaml]")
+        expect(chain).toContain("$(circle-small-filled) *not set* · [envs/prod.yaml]")
     })
 })
 
