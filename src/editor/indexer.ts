@@ -230,7 +230,7 @@ export class Indexer implements vscode.Disposable {
     /** Writes the releases that did not load to the output channel, once per change of the result. */
     private logSummary(root: string): void {
         const { releases, failures } = this.state
-        const head = `${releases.length} releases loaded, ${failures.length} not loaded`
+        const head = `${countOf(releases.length, "release")} loaded, ${failures.length} not loaded`
         const lines = failures.map(
             ({ spec, reason }) =>
                 `Not loaded: ${releaseTitle(spec)} (${where(spec, root)}): ${reason}`

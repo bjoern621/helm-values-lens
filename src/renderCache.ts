@@ -15,6 +15,7 @@ import { releaseTitle } from "./hints"
 import { type Log, SILENT, durationSince } from "./log"
 import type { Release } from "./release"
 import { type Rendered, renderRelease, resourcesOf } from "./render"
+import { countOf } from "./text"
 
 interface Entry {
     fingerprint: string
@@ -93,7 +94,7 @@ export async function cachedRender(
     const started = Date.now()
     const rendered = await renderRelease(release, helmPath)
     log.debug(
-        `${title}: rendered ${rendered.resources.size} resources in ${durationSince(started)}`
+        `${title}: rendered ${countOf(rendered.resources.size, "resource")} in ${durationSince(started)}`
     )
     cache?.put(release, helmPath, rendered)
     return rendered

@@ -9,6 +9,7 @@ import { unknownKeys } from "./release"
 import { renderRelease } from "./render"
 import { dottedPath, splitPathKey } from "./yamlPaths"
 import { discover } from "./workspace"
+import { countOf } from "./text"
 
 const [root = ".", only] = process.argv.slice(2)
 const cacheDir = join(homedir(), ".cache", "helm-values-lens")
@@ -54,14 +55,14 @@ async function main(): Promise<void> {
         if (process.env.RENDER === "1" && !discovery.rendered.has(spec.id)) {
             try {
                 const rendered = await renderRelease(release, "helm")
-                console.log(`  rendered ${rendered.resources.size} resources`)
+                console.log(`  rendered ${countOf(rendered.resources.size, "resource")}`)
             } catch (error) {
                 console.log(`  could not render: ${String(error).split("\n")[0]}`)
             }
         }
     }
     console.log(
-        `\n${discovery.releases.length} releases loaded, ${discovery.failures.length} not loaded, ${discovery.renderErrors.size} could not render`
+        `\n${countOf(discovery.releases.length, "release")} loaded, ${discovery.failures.length} not loaded, ${discovery.renderErrors.size} could not render`
     )
 }
 

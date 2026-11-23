@@ -2,6 +2,7 @@ import { basename, relative, sep } from "node:path"
 import type { ReleaseSpec } from "./argo"
 import { isPlainMap, type Layer, sameValue, settingOf, valueAt } from "./coalesce"
 import { chartDefault, isUnknownKey, type Release, VALUES_READ } from "./release"
+import { countOf } from "./text"
 import {
     type KeySite,
     pathKey,
@@ -362,10 +363,11 @@ function distinctParts(starts: readonly { file: string; line: number }[]): strin
 /** Shows a value in one short line: a string bare, a map or a list by its size. */
 export function preview(value: unknown, width = 40): string {
     if (value === undefined) return "unset"
-    if (Array.isArray(value)) return value.length === 0 ? "[]" : `[${value.length} items]`
+    if (Array.isArray(value))
+        return value.length === 0 ? "[]" : `[${countOf(value.length, "item")}]`
     if (isPlainMap(value)) {
         const keys = Object.keys(value).length
-        return keys === 0 ? "{}" : `{${keys} keys}`
+        return keys === 0 ? "{}" : `{${countOf(keys, "key")}}`
     }
     const text = typeof value === "string" ? (value === "" ? '""' : value) : JSON.stringify(value)
     const line = text.split("\n")[0]!

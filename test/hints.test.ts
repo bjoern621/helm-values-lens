@@ -102,7 +102,7 @@ describe("the hints", () => {
         const labels = templateHints(file, readFileSync(file, "utf8"), [release]).map(
             (hint) => hint.label
         )
-        expect(labels).toEqual(["myrepo", "2.0", "3", "{1 keys}", "eu"])
+        expect(labels).toEqual(["myrepo", "2.0", "3", "{1 key}", "eu"])
     })
 
     it("span the whole .Values path in a template and the whole setting in a values file", () => {
