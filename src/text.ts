@@ -8,6 +8,11 @@ export function countOf(n: number, noun: string): string {
     return `${n} ${noun}${n === 1 ? "" : "s"}`
 }
 
+/** The verb form that agrees with a count: `singular` for one, `plural` for every other count. */
+export function agreeing(n: number, singular: string, plural: string): string {
+    return n === 1 ? singular : plural
+}
+
 /** Joins the first `shown` names with commas and "and", naming how many more the list leaves out. */
 export function listed(names: readonly string[], shown: number): string {
     const rest = names.length - shown

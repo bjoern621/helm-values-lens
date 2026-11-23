@@ -8,7 +8,7 @@ import {
     type KeyUse,
     removableGroup
 } from "../quickFixes"
-import { countOf, listed } from "../text"
+import { agreeing, countOf, listed } from "../text"
 import { dottedPath, type Position } from "../yamlPaths"
 import { DIAGNOSTIC_SOURCE, RELEASES_NAMED } from "./config"
 import type { LensState } from "./state"
@@ -121,7 +121,7 @@ export class Diagnostics implements vscode.Disposable {
                     add(
                         fsPath,
                         span,
-                        `${unreadMessage(use)} ${countOf(unloaded, "release")} that take this file did not load.`,
+                        `${unreadMessage(use)} ${countOf(unloaded, "release")} that ${agreeing(unloaded, "takes", "take")} this file did not load.`,
                         Information,
                         MarkerCode.Unread
                     )

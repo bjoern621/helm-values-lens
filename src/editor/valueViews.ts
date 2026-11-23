@@ -9,7 +9,7 @@ import {
 } from "../hints"
 import { pathMarkdown, releaseMarkdown } from "../markdown"
 import type { Release } from "../release"
-import { countOf } from "../text"
+import { agreeing, countOf } from "../text"
 import type { Position, ValuePath } from "../yamlPaths"
 import { DOCUMENT_SELECTOR, readSettings } from "./config"
 import type { FileReleases, LensState } from "./state"
@@ -120,7 +120,7 @@ function targetHover(
     const shownOnly = targets.every((target) => releases.shown.includes(target.release))
     if (hidden > 0 && shownOnly)
         sections.push(
-            `$(info) ${countOf(hidden, "other release")} read this file. Pick one in the status bar to show its values.`
+            `$(info) ${countOf(hidden, "other release")} ${agreeing(hidden, "reads", "read")} this file. Pick one in the status bar to show its values.`
         )
     const markdown = hoverMarkdown([...new Set(sections)].join("\n\n---\n\n"))
     const line = targets[0]!.start.line

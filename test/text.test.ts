@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { countOf, listed } from "../src/text"
+import { agreeing, countOf, listed } from "../src/text"
 
 describe("a list of names", () => {
     it("joins the last two names with and", () => {
@@ -17,5 +17,10 @@ describe("a count", () => {
     it("takes the plural unless it equals one", () => {
         expect(countOf(1, "resource")).toBe("1 resource")
         expect(countOf(0, "resource")).toBe("0 resources")
+    })
+
+    it("takes the verb form that agrees with it", () => {
+        expect(`${countOf(1, "release")} ${agreeing(1, "reads", "read")}`).toBe("1 release reads")
+        expect(`${countOf(2, "release")} ${agreeing(2, "reads", "read")}`).toBe("2 releases read")
     })
 })
