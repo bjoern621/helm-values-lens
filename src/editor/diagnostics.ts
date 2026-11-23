@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import { releaseTitle } from "../hints"
+import { releaseTitle, siteEnd, winningUserSite } from "../hints"
 import { groupLayer, type KeyGroup, keyGroups, removableGroup, unknownSites } from "../quickFixes"
 import { listed } from "../text"
 import { dottedPath, type Position } from "../yamlPaths"
@@ -14,6 +14,7 @@ interface Span {
 /**
  * Marks the problems of the releases in the files that hold them.
  * A release that did not load or render gets a warning or an error at the line that names it.
+ * A value that a `values.schema.json` rejects gets an error at the key that sets it, as `helm template` would fail on it.
  * A key unknown to its chart gets a note. A key equal to the chart default gets a hint, which offers its quick fix and counts as no problem.
  */
 export class Diagnostics implements vscode.Disposable {
@@ -58,6 +59,19 @@ export class Diagnostics implements vscode.Disposable {
             const title = releaseTitle(release.spec)
             for (const problem of release.problems)
                 add(appFile, wholeLine(appLine), `${title}: ${problem}`, Warning)
+            for (const { path, message } of release.schemaErrors) {
+                const site = winningUserSite(release, path)
+                const fsPath = site && release.trace.layers[site.layerIndex]!.fsPath
+                if (site === undefined || fsPath === undefined)
+                    add(appFile, wholeLine(appLine), `${title}: ${message}`, Error)
+                else
+                    add(
+                        fsPath,
+                        { start: site.key, end: siteEnd(site) },
+                        `${title}: ${message}`,
+                        Error
+                    )
+            }
             const renderError = this.state.renderError(release.spec.id)
             if (renderError !== undefined)
                 add(

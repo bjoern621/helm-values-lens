@@ -1,7 +1,7 @@
 import { isMap, isScalar, type Node, type Pair, parseDocument, type YAMLMap } from "yaml"
-import { isPlainMap, type Layer, sameValue, settingOf, valueAt } from "./coalesce"
+import { isPlainMap, type Layer, sameValue, settingOf } from "./coalesce"
 import { type SettingSite, settingSites, siteEnd } from "./hints"
-import { chartDefault, isUnknownKey, type Release } from "./release"
+import { chartDefault, isUnknownKey, knownKeys, type Release } from "./release"
 import { type Offset, pathKey, type Position, splitPathKey, type ValuePath } from "./yamlPaths"
 
 /** Replaces the text between two offsets of a document. */
@@ -163,19 +163,8 @@ function lineStarts(text: string): number[] {
  */
 export function similarKeys(release: Release, path: ValuePath): string[] {
     if (!isUnknownKey(release, path)) return []
-    const parent = path.slice(0, -1)
     const name = path.at(-1)!
-    const known = new Set<string>()
-    for (const layer of release.trace.layers.slice(0, release.firstUserLayer)) {
-        const map = parent.length === 0 ? layer.data : valueAt(layer.data, parent)
-        if (isPlainMap(map)) for (const key of Object.keys(map)) known.add(key)
-    }
-    const parentKey = pathKey(parent)
-    for (const read of release.readPaths) {
-        const segments = splitPathKey(read)
-        if (segments.length !== parent.length + 1) continue
-        if (pathKey(segments.slice(0, -1)) === parentKey) known.add(segments.at(-1)!)
-    }
+    const known = new Set(knownKeys(release, path.slice(0, -1)).keys())
     known.delete(name)
     const allowed = Math.max(1, Math.floor(name.length / 4))
     return [...known]

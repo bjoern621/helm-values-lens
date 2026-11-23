@@ -19,7 +19,9 @@ const layer = (label: string, text: string, kind: Layer["kind"] = "file"): Layer
 
 const releaseOf = (layers: Layer[], reads: string[][] = []): Release =>
     ({
+        chart: { schemas: [] },
         trace: coalesce(layers),
+        defaults: coalesce(layers.slice(0, 1)).final,
         firstUserLayer: 1,
         readPaths: new Set(reads.map(pathKey))
     }) as unknown as Release

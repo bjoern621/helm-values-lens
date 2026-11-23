@@ -2,6 +2,7 @@ import type { Setting } from "./coalesce"
 import { sameValue, valueAt } from "./coalesce"
 import { fileLink, layerName, preview, releaseTitle, siteLink } from "./hints"
 import type { Release } from "./release"
+import { type SchemaField, schemaField } from "./schema"
 import { type Rendered, resourcesHolding } from "./render"
 import { countOf, listed } from "./text"
 import { dottedPath, pathKey, type ValuePath } from "./yamlPaths"
@@ -26,12 +27,31 @@ export function pathMarkdown(
     fromFile: string,
     details: PathDetails
 ): string {
-    const chain = chainMarkdown(release, path, fromFile, details.allLayers)
-    if (details.rendered === undefined) return chain
-    const holders = resourcesHolding(details.rendered, valueAt(release.trace.final, path))
-    if (holders.length === 0) return chain
-    const names = holders.map((key) => `\`${key}\``)
-    return `${chain}\n\nRendered in ${listed(names, RENDERED_IN_SHOWN)}`
+    const sections = [chainMarkdown(release, path, fromFile, details.allLayers)]
+    const field = schemaField(release.chart.schemas, path)
+    if (field !== undefined) sections.push(...schemaMarkdown(field))
+    const key = pathKey(path)
+    for (const error of release.schemaErrors)
+        if (pathKey(error.path) === key) sections.push(`$(error) ${error.message}`)
+    if (details.rendered !== undefined) {
+        const holders = resourcesHolding(details.rendered, valueAt(release.trace.final, path))
+        const names = holders.map((holder) => `\`${holder}\``)
+        if (holders.length > 0) sections.push(`Rendered in ${listed(names, RENDERED_IN_SHOWN)}`)
+    }
+    return sections.join("\n\n")
+}
+
+/** What a `values.schema.json` says about one key: its description, then its type and the values that it allows. */
+export function schemaMarkdown(field: SchemaField): string[] {
+    const allowed = field.enum?.map((value) => `\`${JSON.stringify(value)}\``).join(", ")
+    const facts = [
+        field.type === undefined ? undefined : `\`${field.type}\``,
+        allowed === undefined ? undefined : `one of ${allowed}`
+    ].filter((fact) => fact !== undefined)
+    return [
+        ...(field.description === undefined ? [] : [field.description]),
+        ...(facts.length === 0 ? [] : [`$(symbol-ruler) Schema: ${facts.join(" · ")}`])
+    ]
 }
 
 /**

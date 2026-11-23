@@ -13,6 +13,7 @@ import { promisify } from "node:util"
 import { parse } from "yaml"
 import type { ChartRef } from "./argo"
 import type { Layer } from "./coalesce"
+import { type ChartSchema, readSchema } from "./schema"
 import { type KeySite, parseValues, pathKey } from "./yamlPaths"
 
 const run = promisify(execFile)
@@ -37,6 +38,8 @@ export interface LoadedChart {
     /** The defaults of the chart and of each dependency, the dependencies first. */
     layers: Layer[]
     dependencies: Dependency[]
+    /** The `values.schema.json` of the chart and of each dependency that has one. */
+    schemas: ChartSchema[]
 }
 
 /** How long a download may take before it counts as failed. An unreachable registry otherwise holds discovery for minutes. */
@@ -121,6 +124,7 @@ export function loadChart(dir: string, cacheDir: string): LoadedChart {
     const name = meta.name ?? dir
     const layers: Layer[] = []
     const dependencies: Dependency[] = []
+    const schemas: ChartSchema[] = []
     const chartsDir = join(dir, "charts")
     if (existsSync(chartsDir)) {
         for (const entry of readdirSync(chartsDir, { withFileTypes: true })) {
@@ -150,11 +154,15 @@ export function loadChart(dir: string, cacheDir: string): LoadedChart {
                 })
                 const layer = defaultsLayer(subDir, `${key} chart values.yaml`, "subchart")
                 layers.push(nestedUnder(layer, key))
+                const schema = readSchema(subDir, [key], `${key} values.schema.json`)
+                if (schema !== undefined) schemas.push(schema)
             }
         }
     }
     layers.push(defaultsLayer(dir, "chart values.yaml", "chart"))
-    return { dir, name, version: String(meta.version ?? ""), layers, dependencies }
+    const schema = readSchema(dir, [], "values.schema.json")
+    if (schema !== undefined) schemas.push(schema)
+    return { dir, name, version: String(meta.version ?? ""), layers, dependencies, schemas }
 }
 
 function defaultsLayer(dir: string, label: string, kind: "chart" | "subchart"): Layer {

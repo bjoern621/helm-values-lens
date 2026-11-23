@@ -3,6 +3,7 @@ import { join } from "node:path"
 import type { LayerSource, ReleaseSpec } from "./argo"
 import type { Dependency, LoadedChart } from "./chart"
 import { coalesce, isPlainMap, type Layer, parametersData, type Trace, valueAt } from "./coalesce"
+import { type SchemaError, schemaErrors, type SchemaField, schemaField, schemaKeys } from "./schema"
 import { parseValues, pathKey, splitPathKey, type ValuePath } from "./yamlPaths"
 
 /** A release with its layers merged. */
@@ -16,8 +17,12 @@ export interface Release {
     problems: string[]
     /** The keys of the dependencies that a `condition` or the `tags` turn off. */
     disabled: Set<string>
+    /** The chart defaults merged, as the values of a release that sets nothing. */
+    defaults: Record<string, unknown>
     /** Every path that a template of the chart or a dependency reads through `.Values`, by `pathKey`. */
     readPaths: Set<string>
+    /** The final values that a `values.schema.json` of the chart or of a rendered dependency rejects. */
+    schemaErrors: SchemaError[]
 }
 
 /** Reads a file, from the editor where it holds unsaved changes. */
@@ -48,6 +53,7 @@ export function buildRelease(
             )
     )
     if (disabled.size > 0) trace = coalesce([...defaults, ...userLayers])
+    const schemas = chart.schemas.filter((schema) => !disabled.has(schema.prefix[0] ?? ""))
     return {
         spec,
         chart,
@@ -55,7 +61,9 @@ export function buildRelease(
         firstUserLayer: defaults.length,
         disabled,
         problems,
-        readPaths: templateReads(chart)
+        defaults: coalesce(defaults).final,
+        readPaths: templateReads(chart),
+        schemaErrors: schemaErrors(schemas, trace.final, problems)
     }
 }
 
@@ -167,7 +175,7 @@ function templateFiles(dir: string): string[] {
  * Such a template hands the whole map on, as `{{- with .Values.probe }}{{ toYaml . }}` does.
  */
 export function isUnknownKey(release: Release, path: ValuePath): boolean {
-    const { trace, firstUserLayer, readPaths } = release
+    const { readPaths } = release
     for (let length = path.length - 1; length > 0; length--) {
         const ancestor = pathKey(path.slice(0, length))
         if (readPaths.has(ancestor) && !readsBelow(readPaths, ancestor)) return false
@@ -175,27 +183,66 @@ export function isUnknownKey(release: Release, path: ValuePath): boolean {
     if (chartDefault(release, path) !== undefined) return false
     const key = pathKey(path)
     if (readPaths.has(key) || readsBelow(readPaths, key)) return false
+    if (schemaField(release.chart.schemas, path) !== undefined) return false
     for (let length = path.length - 1; length >= 0; length--) {
-        const ancestor =
-            length === 0
-                ? trace.layers
-                      .slice(0, firstUserLayer)
-                      .map((layer) => layer.data)
-                      .find(isPlainMap)
-                : chartDefault(release, path.slice(0, length))
+        const ancestor = chartDefault(release, path.slice(0, length))
         if (ancestor === undefined) continue
         return isPlainMap(ancestor) && Object.keys(ancestor).length > 0
     }
     return false
 }
 
-/** The value that the chart defaults of a release give `path`, or undefined where they leave it unset. */
+/**
+ * The value that the chart defaults of a release give `path`, or undefined where they leave it unset.
+ * The values of the parent chart win over the defaults of a dependency, as in Helm.
+ * A null default leaves the key unset but still names it, so it comes back as null.
+ */
 export function chartDefault(release: Release, path: ValuePath): unknown {
-    for (const layer of release.trace.layers.slice(0, release.firstUserLayer)) {
-        const value = valueAt(layer.data, path)
-        if (value !== undefined) return value
+    const merged = valueAt(release.defaults, path)
+    if (merged !== undefined) return merged
+    const named = release.trace.layers
+        .slice(0, release.firstUserLayer)
+        .some((layer) => valueAt(layer.data, path) === null)
+    return named ? null : undefined
+}
+
+/** What the chart knows about one key: its default, whether a template reads it and what its schema says. */
+export interface KnownKey {
+    name: string
+    default: unknown
+    read: boolean
+    schema: SchemaField | undefined
+}
+
+/** The keys inside the map at `parent` that the chart defaults, reads or describes in a schema, by name. */
+export function knownKeys(release: Release, parent: ValuePath): Map<string, KnownKey> {
+    const keys = new Map<string, KnownKey>()
+    const known = (name: string) => {
+        let key = keys.get(name)
+        if (key === undefined) {
+            const path = [...parent, name]
+            key = {
+                name,
+                default: chartDefault(release, path),
+                read: false,
+                schema: schemaField(release.chart.schemas, path)
+            }
+            keys.set(name, key)
+        }
+        return key
     }
-    return undefined
+    for (const layer of release.trace.layers.slice(0, release.firstUserLayer)) {
+        const map = valueAt(layer.data, parent)
+        if (isPlainMap(map)) for (const name of Object.keys(map)) known(name)
+    }
+    const parentKey = pathKey(parent)
+    for (const read of release.readPaths) {
+        const segments = splitPathKey(read)
+        if (segments.length === parent.length + 1 && pathKey(segments.slice(0, -1)) === parentKey)
+            known(segments.at(-1)!).read = true
+    }
+    for (const name of schemaKeys(release.chart.schemas, parent)) known(name)
+    return keys
 }
 
 function readsBelow(readPaths: Set<string>, key: string): boolean {

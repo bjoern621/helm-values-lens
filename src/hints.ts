@@ -54,6 +54,24 @@ export function settingSites(fsPath: string, releases: readonly Release[]): Sett
     return sites
 }
 
+/**
+ * Where the winning user layer sets `path`, or the nearest map around it where no user layer sets the path itself.
+ * Undefined where the chart defaults alone set it, or where the layer sits in no file.
+ */
+export function winningUserSite(release: Release, path: ValuePath): SettingSite | undefined {
+    for (let length = path.length; length > 0; length--) {
+        const key = pathKey(path.slice(0, length))
+        const setting = release.trace.settings.get(key)?.at(-1)
+        if (setting === undefined || setting.layerIndex < release.firstUserLayer) continue
+        const layer = release.trace.layers[setting.layerIndex]!
+        const site = layer.sites.get(key)
+        if (layer.fsPath === undefined || site === undefined) continue
+        if (layer.kind === "inline" && layer.offset === undefined) continue
+        return placed(release, setting.layerIndex, key, site, layer)
+    }
+    return undefined
+}
+
 function placed(
     release: Release,
     layerIndex: number,

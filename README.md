@@ -27,6 +27,10 @@ A repository holding one of those needs no settings.
   A chart upgrade that changes the default then reaches the release.
   The key itself stays valid: three faint dots under it mark the fix, with no warning.
 - A quick fix on an unknown key, which renames it to a key of the chart a typo away or removes it.
+- An error on a key whose final value the `values.schema.json` of the chart rejects, such as `replicas must be >= 1`, where `helm template` would fail.
+  The schema of a dependency checks the values under its key.
+  A value that no file sets, such as a missing required key, gets its error on the map around it or on the release.
+- In the hover of a key: the description, the type and the allowed values from the schema.
 - On hover over the line that names a release, such as `metadata.name` of an Application: its chart and its values layers.
 - Above the release in its Application, Helmfile, HelmRelease or kustomization: the chart, the number of values layers, a link to the files of the chart and the state of the last render.
 - A problem marker on the release where its chart could not be loaded or `helm template` could not render it.
@@ -120,6 +124,9 @@ These stay out of the trace:
 - Flux `valuesFiles` that leave out `values.yaml`: Flux then drops the chart defaults, which the trace keeps.
 - A list of maps under Kustomize `valuesInline`, which Kustomize merges by a key such as `name`.
   The trace replaces it whole.
+- A `$ref` to another file or a URL in a `values.schema.json`.
+  The release shows a warning.
+  That schema checks nothing.
 
 ## Install
 
