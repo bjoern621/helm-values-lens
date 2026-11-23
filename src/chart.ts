@@ -47,6 +47,9 @@ export interface LoadedChart {
 /** How long a download may take before it counts as failed. An unreachable registry otherwise holds discovery for minutes. */
 const PULL_TIMEOUT_MS = 45_000
 
+/** How long the check for a web page in place of a chart may take after a failed download. */
+const PAGE_CHECK_TIMEOUT_MS = 10_000
+
 /**
  * How long a failed download stays failed before the next attempt, across restarts of VS Code.
  * A registry out of reach, such as one behind a VPN, would otherwise hold every start for `PULL_TIMEOUT_MS`.
@@ -178,10 +181,12 @@ async function pullChart(
         const { stderr, killed } = error as { stderr?: string; killed?: boolean }
         const reason = killed
             ? `no answer within ${PULL_TIMEOUT_MS / 1000} s`
-            : (stderr
-                  ?.trim()
-                  .replace(/^Error: /, "")
-                  .split("\n")[0] ?? String(error))
+            : (await servesWebPage(sourceUrl(ref, oci, registry)))
+              ? "the server sent a web page in place of the chart"
+              : (stderr
+                    ?.trim()
+                    .replace(/^Error: /, "")
+                    .split("\n")[0] ?? String(error))
         throw new Error(
             `${ref.chart} ${ref.version} did not download from ${ref.repoURL}: ${reason}`
         )
@@ -189,6 +194,39 @@ async function pullChart(
     rmSync(target, { recursive: true, force: true })
     renameSync(partial, target)
     return target
+}
+
+/** The URL that helm asks first for the chart: its manifest in an OCI registry, or the index of a Helm repository. */
+function sourceUrl(
+    ref: { repoURL: string; chart: string; version: string },
+    oci: boolean,
+    registry: string
+): string {
+    if (!oci) return `${ref.repoURL.replace(/\/$/, "")}/index.yaml`
+    const [host, ...path] = registry.split("/")
+    return `https://${[host, "v2", ...path, ref.chart, "manifests", ref.version || "latest"].join("/")}`
+}
+
+/**
+ * Tells whether `url` answers with an HTML page, such as a sign-in page that a proxy puts in front of a repository.
+ * Helm reads such a page as the format that it expected and reports a parse error of that format, which differs between an OCI registry and a Helm repository.
+ * A server out of reach or an answer in any other format counts as no page.
+ */
+export async function servesWebPage(url: string): Promise<boolean> {
+    try {
+        const response = await fetch(url, { signal: AbortSignal.timeout(PAGE_CHECK_TIMEOUT_MS) })
+        if (response.headers.get("content-type")?.includes("html")) {
+            await response.body?.cancel()
+            return true
+        }
+        const reader = response.body?.getReader()
+        const first = reader === undefined ? undefined : await reader.read()
+        await reader?.cancel()
+        const start = new TextDecoder().decode(first?.value).trimStart().slice(0, 15).toLowerCase()
+        return start.startsWith("<!doctype html") || start.startsWith("<html")
+    } catch {
+        return false
+    }
 }
 
 /** Reads the defaults of a chart and of the charts in its `charts/` folder. */
