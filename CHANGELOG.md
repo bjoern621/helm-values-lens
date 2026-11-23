@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.10.2 (2026-11-23)
+
 ### Changed
 
 - One entry of the release picker covers an Application and the Applications that its chart renders (listed each apart).
