@@ -2,7 +2,7 @@
     "name": "helm-values-lens",
     "displayName": "Helm Values Lens",
     "description": "Shows where each Helm value gets set, which layer overrides it and the value that the chart renders with. Reads the value order from Argo CD Applications.",
-    "version": "1.3.4",
+    "version": "1.4.0",
     "publisher": "bjoern621",
     "license": "MIT",
     "private": true,
